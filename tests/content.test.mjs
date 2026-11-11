@@ -3,17 +3,22 @@ import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
 import {modules,lessons,tasks,upcomingModules,taskById,lessonById} from '../src/content.js';
 import {assessments,assessmentTasks} from '../src/assessments.js';
+import {clinicTasks} from '../src/clinic.js';
+import {xrayScenarios} from '../src/xray.js';
 import {SEED_SQL,ALTERNATE_SQL,SCHEMA} from '../src/data.js';
 import {splitSQL,ensureSelect,queryReadOnly,compareResults,gradeSQL} from '../src/sql.js';
 import {initialProgress,normalizeProgress,exportProgress,importProgress,mastery} from '../src/progress.js';
 
-const all=[...tasks,...assessmentTasks];
+const all=[...tasks,...assessmentTasks,...clinicTasks];
 test('Only real finished lessons are offered, with unique skill and task IDs',()=>{
  assert.equal(modules.length,6);
  assert.equal(lessons.length,24);
  assert.equal(tasks.length,58);
  assert.equal(assessments.length,3);
  assert.equal(assessmentTasks.length,6);
+ assert.equal(clinicTasks.length,8);
+ assert.equal(xrayScenarios.length,4);
+ assert.equal(xrayScenarios.flatMap(x=>x.steps).length,15);
  assert.equal(new Set(lessons.map(x=>x.id)).size,lessons.length);
  assert.equal(new Set(all.map(x=>x.id)).size,all.length);
  assert.ok(upcomingModules.length>=4);
@@ -76,6 +81,18 @@ test('Every SQL answer executes on original and adversarial PostgreSQL fixtures'
     assert.ok(variant.rows.length>0,task.id+' unexpectedly empty on test dataset');
     const checked=await gradeSQL(task,task.sql,base,alt);
     assert.equal(checked.ok,true,task.id);
+  }
+  for(const scenario of xrayScenarios){
+    for(const step of scenario.steps){
+      assert.ok(step.grain&&step.why&&step.sql,scenario.id+' incomplete explanatory step');
+      const result=await queryReadOnly(base,step.sql);
+      assert.ok(result.fields.length,scenario.id+' step must return real SQL columns');
+      assert.ok((await queryReadOnly(alt,step.sql)).fields.length,scenario.id+' step fails on alternate data');
+    }
+  }
+  for(const clinic of clinicTasks){
+    const broken=await gradeSQL(clinic,clinic.brokenSQL,base,alt);
+    assert.equal(broken.ok,false,clinic.id+' broken query must actually be wrong');
   }
   const incorrect=await gradeSQL(taskById['filter-2'],"SELECT order_id,status FROM orders WHERE status='cancelled'",base,alt);
   assert.equal(incorrect.ok,false);

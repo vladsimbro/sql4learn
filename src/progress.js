@@ -1,8 +1,9 @@
 import {lessons,tasks} from './content.js';
 import {assessmentTasks} from './assessments.js';
+import {clinicTasks} from './clinic.js';
 export const STORAGE_KEY='sql4learn-progress-v1';
 export function initialProgress(){return {version:1,completed:[],quiz:{},read:[],drafts:{},notes:{},theme:'light',lastRoute:'#/home'};}
-const ids=new Set([...tasks,...assessmentTasks].map(item=>item.id)),lessonIds=new Set(lessons.map(lesson=>lesson.id));
+const ids=new Set([...tasks,...assessmentTasks,...clinicTasks].map(item=>item.id)),lessonIds=new Set(lessons.map(lesson=>lesson.id));
 const record=obj=>obj&&typeof obj==='object'&&!Array.isArray(obj)?obj:{};
 const safeRecord=(input,allowed,keyLimit=10000)=>Object.fromEntries(Object.entries(record(input)).filter(([k,v])=>allowed.has(k)&&typeof v==='string'&&v.length<=keyLimit));
 export function normalizeProgress(value){

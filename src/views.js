@@ -1,5 +1,7 @@
 import {modules,lessons,tasks,lessonById,taskById,moduleById,upcomingModules,project} from './content.js';
 import {assessments,assessmentById} from './assessments.js';
+import {xrayScenarios,xrayById} from './xray.js';
+import {clinicTasks,clinicTaskById} from './clinic.js';
 import {SCHEMA} from './data.js';
 import {mastery} from './progress.js';
 
@@ -16,7 +18,7 @@ const pill=(label,style='')=>`<span class="pill ${style}">${esc(label)}</span>`;
 const header=(eyebrow,title,description,action='')=>`<div class="page-header"><div><p class="section-eyebrow">${esc(eyebrow)}</p><h1>${esc(title)}</h1><p>${esc(description)}</p></div>${action}</div>`;
 
 export function renderHome(state){
- const completed=state.progress.completed.length;
+ const completed=tasks.filter(task=>state.progress.completed.includes(task.id)).length;
  const mastered=lessons.filter(l=>lessonDone(state,l)).length;
  const start=lessons.find(l=>!lessonDone(state,l))||lessons[0];
  const module=moduleById[start.moduleId];
@@ -73,7 +75,7 @@ function quiz(state,l){
 const flow={start:['SELECT','Вычисление выражений','Таблица результата'],filter:['FROM','WHERE','SELECT','ORDER BY'],aggregate:['FROM','WHERE','GROUP BY','Агрегаты','HAVING','SELECT'],joins:['FROM','JOIN ... ON','WHERE','SELECT'],cte:['WITH: этапы','Внешний SELECT','Результат'],windows:['Исходные строки','PARTITION BY','ORDER BY','OVER: значение']};
 function flowChart(m){const items=flow[m]||flow.start;return `<div class="flow-steps">${items.map((item,i)=>`${i?'<i>→</i>':''}<span>${esc(item)}</span>`).join('')}</div>`;}
 function taskEditor(state,task,exam=false){
- const note=state.progress.drafts[task.id]??'',result=state.result?.taskId===task.id?state.result:null;
+ const note=state.progress.drafts[task.id]??task.brokenSQL??'',result=state.result?.taskId===task.id?state.result:null;
  return `<section class="card lesson-task" id="task-editor">
   <div class="task-head"><div><p class="task-overline">САМОСТОЯТЕЛЬНЫЙ SQL · ${esc(task.id)}</p><h2>${esc(task.title)}</h2></div>${done(state,task.id)?pill('✓ Решено','teal'):pill('Задача')}</div>
   <p class="task-desc">${esc(task.prompt)}</p>
@@ -189,6 +191,40 @@ export function renderPlayground(state){
  <div id="task-feedback">${output?renderFeedback(output):''}</div><div id="task-result">${output?.query?renderQueryTable(output.query):''}</div>
  </section></div><aside class="workspace-right">${schemaPanel(state)}</aside></div>`;
 }
+
+export function renderXray(state){
+ const selected=xrayById[state.xrayScenario]||xrayScenarios[0];
+ const index=Math.max(0,Math.min(state.xrayStep,selected.steps.length-1));
+ const stage=selected.steps[index],shown=state.xrayResult?.scenario===selected.id&&state.xrayResult?.index===index;
+ return header('SQL X-RAY / ВИЗУАЛИЗАЦИЯ','Смотри, что SQL делает со строками','Не картинки с кругами: каждый этап выполняется в настоящем PostgreSQL. Сравни зерно, число строк и бизнес-смысл.')+
+ `<div class="xray-scene-list">${xrayScenarios.map(item=>`<button class="card xray-scene ${item.id===selected.id?'active':''}" data-xray-scenario="${item.id}"><strong>${esc(item.title)}</strong><span>${esc(item.subtitle)}</span></button>`).join('')}</div>
+ <div class="workspace" style="margin-top:20px"><div class="workspace-main">
+ <section class="card panel"><p class="section-eyebrow">СЦЕНАРИЙ · ${esc(selected.title)}</p>
+ <div class="xray-step-nav">${selected.steps.map((item,i)=>`<button class="xray-step ${i===index?'active':''}" data-xray-step="${selected.id}:${i}"><span>${i+1}</span>${esc(item.title)}</button>`).join('')}</div>
+ <h2 class="panel-title" style="margin-top:20px">${esc(stage.title)}</h2><div class="xray-grain"><b>Зерно результата:</b> ${esc(stage.grain)}</div>
+ <pre class="sql-code">${esc(stage.sql)}</pre>
+ <div class="task-actions"><button class="btn primary" data-action="xray-run" ${!state.engineReady?'disabled':''}>Выполнить этот этап</button>
+ ${index<selected.steps.length-1?`<button class="btn" data-xray-step="${selected.id}:${index+1}">Следующий шаг →</button>`:''}
+ ${button('Перейти к уроку',`#/lesson/${selected.lesson}`)}</div>
+ <div id="xray-result">${shown?(state.xrayResult.error?`<div class="feedback error">${esc(state.xrayResult.error)}</div>`:renderQueryTable(state.xrayResult.query)):''}</div>
+ <div class="xray-explain"><strong>Почему результат именно такой</strong><p>${esc(stage.why)}</p></div>
+ </section></div><aside class="workspace-right">${schemaPanel(state)}
+ <section class="card side-card"><h3>Исследовательский метод</h3><p class="small muted" style="line-height:1.85">До запуска предскажи число строк. После запуска сравни фактический результат с ожиданием. Объясни, что теперь означает одна строка.</p></section></aside></div>`;
+}
+export function renderClinic(state){
+ return header('ОТЛАДКА / КЛИНИКА ОШИБОК','Почини сломанный отчёт','Здесь SQL уже написан, но даёт неверный результат. Твоя задача — найти причину и исправить запрос без подсказанного алгоритма.')+
+ `<div class="task-index">${clinicTasks.map((task,i)=>`<a class="card exercise-card" href="#/fix/${task.id}"><div class="between">${pill('Кейс '+String(i+1).padStart(2,'0'),'neutral')}${done(state,task.id)?pill('✓ Исправлено','teal'):pill('Ошибка в логике')}</div><h3>${esc(task.title)}</h3><p>${esc(task.prompt)}</p><span class="small" style="color:var(--blue);font-weight:800">Исследовать SQL →</span></a>`).join('')}</div>`;
+}
+export function renderFix(state,id){
+ const task=clinicTaskById[id];if(!task)return renderNotFound();
+ return `<a href="#/clinic" class="crumb-link">← К клинике ошибок</a>`+
+ header('КЛИНИКА ОШИБОК / НЕЗНАКОМЫЙ КЕЙС',task.title,'В редактор уже вставлен ошибочный SQL. Он выполняется, но возвращает неверные данные. Исправь смысл, а не только синтаксис.')+
+ `<div class="workspace"><div class="workspace-main"><section class="card panel"><div class="learning-objective"><b>Задача аналитика:</b> ${esc(task.prompt)}</div><p class="small muted">Проверь зерно, условия и количество строк. Запрос проверяется на исходной и изменённой базе. Эталон откроется только после зачёта.</p></section>
+ ${taskEditor(state,task,true)}
+ ${done(state,task.id)?`<section class="card lesson-section"><h2>Разбор ошибки</h2><p>${esc(task.diagnosis)}</p><pre class="sql-code">${esc(task.sql)}</pre></section>`:''}
+ </div><aside class="workspace-right">${schemaPanel(state)}</aside></div>`;
+}
+
 export function renderNotFound(){return header('ОШИБКА МАРШРУТА','Раздел не найден','Вернись к учебной программе.',button('На главную','#/home',true));}
 export function renderPage(state,route){
  if(route.page==='home')return {title:'Главная',html:renderHome(state)};
@@ -201,5 +237,8 @@ export function renderPage(state,route){
  if(route.page==='review')return {title:'Мои навыки',html:renderReview(state)};
  if(route.page==='projects')return {title:'Проекты',html:renderProjects(state)};
  if(route.page==='playground')return {title:'SQL-песочница',html:renderPlayground(state)};
+ if(route.page==='xray')return {title:'SQL X-Ray',html:renderXray(state)};
+ if(route.page==='clinic')return {title:'Клиника ошибок',html:renderClinic(state)};
+ if(route.page==='fix')return {title:'Исправление SQL',html:renderFix(state,route.id)};
  return {title:'Не найдено',html:renderNotFound()};
 }
