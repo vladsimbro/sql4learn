@@ -19,11 +19,13 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
  assert.equal(tasks.length,119);
  assert.equal(assessments.length,6);
  assert.equal(assessmentTasks.length,14);
+ assert.deepEqual(assessments.map(a=>a.after),['filter','joins','dates','windows','audit','product'],'Cumulative exams must match the taught curriculum sequence');
  assert.equal(clinicTasks.length,13);
- assert.equal(xrayScenarios.length,7);
- assert.equal(xrayScenarios.flatMap(x=>x.steps).length,27);
+ assert.equal(xrayScenarios.length,8);
+ assert.equal(xrayScenarios.flatMap(x=>x.steps).length,33);
  assert.equal(new Set(lessons.map(x=>x.id)).size,lessons.length);
  assert.equal(new Set(all.map(x=>x.id)).size,all.length);
+ assert.ok(xrayScenarios.some(x=>x.id==='logical-order'&&x.steps.length===6),'SQL logical order must have a live multi-stage data-flow demonstration');
  assert.ok(upcomingModules.length>=3);
  assert.equal(projects.length,2);
  assert.equal(independentProjects.length,1,'Release includes a genuinely independent project rather than relabelled lesson tasks');
