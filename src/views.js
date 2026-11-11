@@ -72,7 +72,7 @@ function quiz(state,l){
  <div class="question-options">${l.quiz.choices.map((text,i)=>`<button class="option ${hasAnswer&&selection===i?(i===l.quiz.correct?'correct':'wrong'):''}" data-quiz="${i}" data-lesson="${l.id}"><span>${String.fromCharCode(65+i)}</span>${esc(text)}</button>`).join('')}</div>
  ${hasAnswer?`<div class="feedback ${selection===l.quiz.correct?'success':'error'}"><strong>${selection===l.quiz.correct?'Верно.':'Есть ошибка — попробуй ещё раз.'}</strong>${esc(l.quiz.why)}</div>`:''}</section>`;
 }
-const flow={start:['SELECT','Вычисление выражений','Таблица результата'],filter:['FROM','WHERE','SELECT','ORDER BY'],aggregate:['FROM','WHERE','GROUP BY','Агрегаты','HAVING','SELECT'],dates:['Календарные границы','FROM / generate_series','JOIN / WHERE','GROUP BY период','SELECT'],joins:['FROM','JOIN ... ON','WHERE','SELECT'],cte:['WITH: этапы','Внешний SELECT','Результат'],windows:['Исходные строки','PARTITION BY','ORDER BY','OVER: значение'],product:['События','Зерно и уникальные люди','JOIN / CTE','Когорта / канал','Агрегаты и метрика']};
+const flow={start:['SELECT','Вычисление выражений','Таблица результата'],filter:['FROM','WHERE','SELECT','ORDER BY'],aggregate:['FROM','WHERE','GROUP BY','Агрегаты','HAVING','SELECT'],dates:['Календарные границы','FROM / generate_series','JOIN / WHERE','GROUP BY период','SELECT'],joins:['FROM','JOIN ... ON','WHERE','SELECT'],cte:['WITH: этапы','Внешний SELECT','Результат'],windows:['Исходные строки','PARTITION BY','ORDER BY','OVER: значение'],product:['События','Зерно и уникальные люди','JOIN / CTE','Когорта / канал','Агрегаты и метрика'],audit:['Выбрать зерно','Проверить ключи','Свернуть детали','JOIN / CTE','Сверить метрику']};
 function flowChart(m){const items=flow[m]||flow.start;return `<div class="flow-steps">${items.map((item,i)=>`${i?'<i>→</i>':''}<span>${esc(item)}</span>`).join('')}</div>`;}
 function taskEditor(state,task,exam=false){
  const note=state.progress.drafts[task.id]??task.brokenSQL??'',result=state.result?.taskId===task.id?state.result:null;
@@ -124,7 +124,11 @@ export function renderLesson(state,id){
  <div class="lesson-tools"><button class="tab active" data-scroll="lesson-theory">Объяснение</button><button class="tab" data-scroll="lesson-quiz">Понимание</button><button class="tab" data-scroll="task-editor">Практика</button></div>
  <section class="card lesson-section" id="lesson-theory">${objective(l)}<h2>Разберём по шагам</h2>
  ${l.theory.map(p=>`<p>${esc(p)}</p>`).join('')}
- <div class="subtle-line"></div><p class="section-eyebrow">ПРИМЕР ЗАПРОСА</p><pre class="sql-code">${esc(l.example)}</pre>
+ <div class="subtle-line"></div><p class="section-eyebrow">ПРИМЕР ЗАПРОСА</p>
+ <p class="small muted">Прежде чем запускать пример, предположи: какие столбцы появятся, сколько строк получится и что означает каждая строка результата.</p>
+ <pre class="sql-code">${esc(l.example)}</pre>
+ <div class="task-actions"><button class="btn" data-action="run-example" data-example-id="${esc(l.id)}" ${!state.engineReady?'disabled':''}>Выполнить и проверить предположение</button></div>
+ <div id="lesson-example-result" aria-live="polite">${state.exampleResult?.lessonId===l.id?(state.exampleResult.error?`<div class="feedback error"><strong>Ошибка выполнения примера</strong>${esc(state.exampleResult.error)}</div>`:renderQueryTable(state.exampleResult.query)):''}</div>
  <p class="small muted">Логический путь от исходных данных к результату</p>${flowChart(m.id)}
  <p><strong>Почему это важно.</strong> ${esc(l.insight)}</p></section>
  <div id="lesson-quiz">${quiz(state,l)}</div>
