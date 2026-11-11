@@ -43,7 +43,8 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
  for(const lesson of lessons){
   assert.ok(lesson.lead.length>35 && lesson.insight.length>80,lesson.id);
   assert.ok(Array.isArray(lesson.theory)&&lesson.theory.length>=2,lesson.id);
-  assert.ok(lesson.example.length>10&&lesson.tasks.length>=2,lesson.id);
+  assert.ok(lesson.example.length>10&&lesson.tasks.length>=2&&lesson.tasks.length<=5,lesson.id+' must have 2–5 independent practice tasks');
+   assert.equal(new Set(lesson.tasks.map(task=>task.prompt.trim().toLocaleLowerCase('ru'))).size,lesson.tasks.length,lesson.id+' must not repeat the same practice condition');
   assert.equal(lesson.quiz.choices.length,3,lesson.id);
   assert.ok(Number.isInteger(lesson.quiz.correct)&&lesson.quiz.correct>=0&&lesson.quiz.correct<3,lesson.id);
   for(const task of lesson.tasks)assert.ok(task.prompt.length>=45&&task.sql.length>15,task.id);
