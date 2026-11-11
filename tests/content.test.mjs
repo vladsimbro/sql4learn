@@ -140,8 +140,15 @@ test('Comparison accepts equivalent ordering when not required, but not duplicat
  const reordered={fields,rows:[{id:2,amount:9},{id:1,amount:9}]};
  assert.equal(compareResults(reordered,expected).ok,true);
  assert.equal(compareResults(reordered,expected,true).ok,false);
+ assert.equal(compareResults(reordered,expected,true).details.kind,'ordered');
+ assert.equal(compareResults(reordered,expected,true).details.row,1);
  assert.equal(compareResults({fields,rows:[{id:1,amount:9},{id:1,amount:9}]},expected).ok,false);
  assert.equal(compareResults({fields:[{name:'other'}],rows:[]},expected).type,'columns');
+ assert.deepEqual(compareResults({fields:[{name:'other'}],rows:[]},expected).details.missing,['id','amount']);
+ const mismatch=compareResults({fields,rows:[{id:1,amount:9},{id:1,amount:9}]},expected);
+ assert.equal(mismatch.details.kind,'values');
+ assert.match(mismatch.details.missing,/id=2/);
+ assert.match(mismatch.details.extra,/id=1/);
 });
 test('Progress is scoped to authored IDs and backups cannot import arbitrary state',()=>{
  const source={completed:['start-1','start-1','evil','checkpoint-1a','portfolio-support-1'],read:['first-query','evil'],quiz:{'first-query':0,evil:100},drafts:{'start-1':'SELECT 1','portfolio-support-1':'SELECT 42',evil:'DROP TABLE orders'},projectNotes:{'support-ops':'SLA и распределение нагрузок проверены.','fake-project':'bad'},theme:'dark'};
