@@ -6,7 +6,7 @@ import {SCHEMA} from './data.js';
 import {SUPPORT_SCHEMA} from './project-data.js';
 import {independentProjects,independentProjectById} from './portfolio.js';
 import {mastery} from './progress.js';
-import {getLessonGuide} from './lesson-guides.js';
+import {getLessonGuide,modulePedagogy} from './lesson-guides.js';
 
 export const esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;");
 const done=(state,id)=>state.progress.completed.includes(id);
@@ -47,10 +47,13 @@ export function renderHome(state){
   </section></div>`;
 }
 export function renderCourse(state){
- return header('КУРСЫ / ОСНОВНОЙ МАРШРУТ','SQL для аналитики','От первого SELECT до оконных функций. Только реализованные, работающие занятия — недостроенные темы честно отмечены отдельно.')+
- `<div class="module-grid">${modules.map((m,i)=>{const p=skill(state,m);return `<section class="card module-card">
+ return header('КУРСЫ / ОСНОВНОЙ МАРШРУТ','SQL для аналитики','От первого SELECT до корректных бизнес-метрик. Темы идут по зависимости знаний: необходимые конструкции объясняются раньше практики с ними.')+
+ `<section class="card curriculum-sequence"><p class="section-eyebrow">ПОЧЕМУ ИМЕННО ТАКАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ</p>
+ <div class="curriculum-sequence-grid">${modules.map((m,i)=>`<a href="#/module/${m.id}" class="curriculum-sequence-step"><span>${String(i+1).padStart(2,'0')}</span><strong>${esc(m.title)}</strong><small>${esc(modulePedagogy[m.id]?.outcome||m.subtitle)}</small></a>`).join('')}</div>
+ <p class="small muted">Модули открыты для свободного просмотра. Но чтобы действительно освоить тему, пройди предыдущие объяснения, реши SQL самостоятельно и вернись к контрольной на сочетание навыков.</p>
+ </section><div class="module-grid">${modules.map((m,i)=>{const p=skill(state,m);return `<section class="card module-card">
     <div class="module-top"><span class="module-icon">${esc(m.icon)}</span>${pill(i===0?'Старт':'Модуль '+(i+1),i===0?'teal':'neutral')}</div>
-    <h2>${esc(m.title)}</h2><p>${esc(m.subtitle)}</p>
+    <h2>${esc(m.title)}</h2><p>${esc(m.subtitle)}</p><p class="module-why"><b>Зачем этот этап:</b> ${esc(modulePedagogy[m.id]?.why||"")}</p>
     <div class="progress-track"><span style="width:${p.percent}%"></span></div>
     <div class="module-card-footer"><span>${m.lessons.length} урока · ${p.total} задач</span><strong>${p.passed}/${p.total}</strong></div>
     ${button(p.passed?'Продолжить модуль':'Открыть модуль',`#/module/${m.id}`)}
