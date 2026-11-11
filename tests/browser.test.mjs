@@ -16,6 +16,9 @@ try{
  await page.locator('.hero h1').waitFor({state:'visible'});
  await page.locator('#engine-status.ready').waitFor({state:'visible',timeout:120000});
  await clickHash('#/lesson/first-query');
+ await page.locator('[data-action="run-example"]').click();
+ await page.locator('#lesson-example-result tbody td').first().waitFor({state:'visible',timeout:30000});
+ assert.equal((await page.locator('#lesson-example-result tbody td').first().textContent()).trim(),'12','Every lesson must let the student inspect live PostgreSQL example output');
  await page.locator('#sql-editor').fill('SELECT 12 * 8 AS total;');
  await page.locator('[data-action="check"]').click();
  await page.locator('#task-feedback .success').waitFor({timeout:45000});
@@ -56,8 +59,17 @@ try{
  assert.equal(await page.locator('[data-exam-tab]').count(),3);
  await clickHash('#/projects');
  assert.equal(await page.locator('.project-hero').count(),2,'Two separate domain case studies must be visible');
+ await clickHash('#/lesson/audit-preaggregate');
+ await page.locator('.lesson-heading h1').waitFor();
+ assert.match(await page.locator('.lesson-heading h1').textContent(),/fan-out/,'Advanced joins topic should be accessible');
+ await page.locator('[data-schema="order_events"]').click();
+ assert.match(await page.locator('.schema-menu').textContent(),/order_events/);
+ await page.locator('[data-action="run-example"]').click();
+ await page.locator('#lesson-example-result tbody tr').first().waitFor({state:'visible',timeout:30000});
+ await clickHash('#/exam/checkpoint-audit');
+ assert.equal(await page.locator('[data-exam-tab]').count(),3,'Independent quality exam has three tasks');
  await clickHash('#/clinic');
- assert.equal(await page.locator('.exercise-card').count(),11,'Clinic should have eleven distinct debugging cases');
+ assert.equal(await page.locator('.exercise-card').count(),13,'Clinic should have thirteen distinct debugging cases');
  await clickHash('#/playground');
  await page.locator('#sql-editor').fill('DELETE FROM orders;');
  await page.locator('[data-action="run"]').click();
@@ -71,6 +83,11 @@ try{
  await page.locator('[data-action="xray-run"]').click();
  await page.locator('#xray-result tbody tr').first().waitFor({state:'visible',timeout:30000});
  assert.equal(await page.locator('#xray-result tbody tr').count(),2,'Joining two order items must multiply the order into two rows');
+ await page.locator('.xray-scene[data-xray-scenario="double-fanout"]').click();
+ await page.locator('.xray-step[data-xray-step="double-fanout:2"]').click();
+ await page.locator('[data-action="xray-run"]').click();
+ await page.locator('#xray-result tbody tr').first().waitFor({state:'visible',timeout:30000});
+ assert.equal(await page.locator('#xray-result tbody tr').count(),4,'Two details must create four cross-join combinations for order 1001');
  await clickHash('#/fix/clinic-5');
  assert.match(await page.locator('#sql-editor').inputValue(),/SUM\(DISTINCT amount\)/,'Error clinic must provide a deliberately wrong query');
  await page.locator('[data-action="check"]').click();
@@ -83,13 +100,13 @@ try{
  await page.locator('#theme-toggle').click();
  assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
  await clickHash('#/practice');
- assert.equal(await page.locator('.exercise-card').count(),91);
+ assert.equal(await page.locator('.exercise-card').count(),109);
  await page.setViewportSize({width:390,height:844});
  await page.locator('#menu-toggle').click();
  assert.ok(await page.locator('#sidebar').evaluate(el=>el.classList.contains('open')),'Mobile navigation should open');
  await page.locator('#sidebar [data-page="course"]').click();
  await page.locator('.module-card').first().waitFor();
- assert.equal(await page.locator('.module-card').count(),8);
+ assert.equal(await page.locator('.module-card').count(),9);
  assert.deepEqual(errors,[],'No runtime JavaScript exceptions');
  console.log('Browser verification passed: live PostgreSQL, correct/incorrect answers, exam integrity, persistence, read-only SQL, theme, mobile navigation.');
 }finally{

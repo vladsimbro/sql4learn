@@ -11,17 +11,17 @@ import {initialProgress,normalizeProgress,exportProgress,importProgress,mastery}
 
 const all=[...tasks,...assessmentTasks,...clinicTasks];
 test('Only real finished lessons are offered, with unique skill and task IDs',()=>{
- assert.equal(modules.length,8);
- assert.equal(lessons.length,35);
- assert.equal(tasks.length,91);
- assert.equal(assessments.length,5);
- assert.equal(assessmentTasks.length,11);
- assert.equal(clinicTasks.length,11);
- assert.equal(xrayScenarios.length,6);
- assert.equal(xrayScenarios.flatMap(x=>x.steps).length,23);
+ assert.equal(modules.length,9);
+ assert.equal(lessons.length,41);
+ assert.equal(tasks.length,109);
+ assert.equal(assessments.length,6);
+ assert.equal(assessmentTasks.length,14);
+ assert.equal(clinicTasks.length,13);
+ assert.equal(xrayScenarios.length,7);
+ assert.equal(xrayScenarios.flatMap(x=>x.steps).length,27);
  assert.equal(new Set(lessons.map(x=>x.id)).size,lessons.length);
  assert.equal(new Set(all.map(x=>x.id)).size,all.length);
- assert.ok(upcomingModules.length>=4);
+ assert.ok(upcomingModules.length>=3);
  assert.equal(projects.length,2);
  for(const project of projects){assert.equal(project.taskIds.length,4);for(const id of project.taskIds)assert.ok(taskById[id],project.id+' references an unknown task');}
  assert.ok(lessons[0].tasks.length>=2);
@@ -33,10 +33,12 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
   assert.ok(Number.isInteger(lesson.quiz.correct)&&lesson.quiz.correct>=0&&lesson.quiz.correct<3,lesson.id);
   for(const task of lesson.tasks)assert.ok(task.prompt.length>=45&&task.sql.length>15,task.id);
  }
- assert.equal(Object.keys(SCHEMA).length,7);
+ assert.equal(Object.keys(SCHEMA).length,8);
  assert.ok(taskById['start-1']&&lessonById['first-query']);
  assert.ok(taskById['date-15']&&lessonById['date-calendar']);
  assert.ok(taskById['product-18']&&lessonById['product-cohorts']);
+ assert.ok(taskById['audit-18']&&lessonById['audit-full-join']);
+ assert.equal(modules[modules.length-1].id,'audit','Advanced data quality must come after all prerequisites');
  assert.ok(modules.findIndex(m=>m.id==='product')>modules.findIndex(m=>m.id==='windows'),'Product cohort analytics must follow windows and CTEs');
  const moduleIndex=modules.findIndex(module=>module.id==='dates');
  assert.ok(moduleIndex>modules.findIndex(module=>module.id==='joins')&&moduleIndex<modules.findIndex(module=>module.id==='cte'),'Date training must follow joins but precede multistage CTEs');
@@ -87,6 +89,22 @@ test('Every SQL answer executes on original and adversarial PostgreSQL fixtures'
   assert.equal(Number(noEvents.rows[0].n),0,'Control user must have no events');
   const premature=await base.query("SELECT COUNT(*) AS n FROM user_events WHERE user_id=10 AND event_type='purchase' AND event_at < (SELECT MIN(event_at) FROM user_events WHERE user_id=10 AND event_type='view')");
   assert.equal(Number(premature.rows[0].n),1,'Strict funnel must detect purchase before first view');
+  const events=await base.query('SELECT COUNT(*) AS n FROM order_events');
+  const altEvents=await alt.query('SELECT COUNT(*) AS n FROM order_events');
+  assert.equal(Number(events.rows[0].n),38,'The original data must have a meaningful order history');
+  assert.equal(Number(altEvents.rows[0].n),46,'The changed data must contain extra history events');
+  const cross=await base.query('SELECT COUNT(*) AS n FROM orders o JOIN order_items i ON i.order_id=o.order_id JOIN order_events e ON e.order_id=o.order_id WHERE o.order_id=1001');
+  assert.equal(Number(cross.rows[0].n),4,'Two independent one-to-many joins must demonstrate 2×2 fanout');
+  const duplicate=await base.query("SELECT COUNT(*) AS n FROM order_events WHERE order_id=1004 AND event_type='assigned'");
+  assert.equal(Number(duplicate.rows[0].n),2,'The base fixture must contain a meaningful potential duplicate');
+  const withoutHistory=await base.query('SELECT COUNT(*) AS n FROM order_events WHERE order_id=1014');
+  assert.equal(Number(withoutHistory.rows[0].n),0,'The base fixture must include missing event history');
+  for(const lesson of lessons){
+    const observed=await queryReadOnly(base,lesson.example);
+    assert.ok(observed.fields.length>0,lesson.id+' example must execute in actual PostgreSQL');
+    const other=await queryReadOnly(alt,lesson.example);
+    assert.ok(other.fields.length>0,lesson.id+' example must also execute on alternate data');
+  }
   for(const task of all){
     const original=await queryReadOnly(base,task.sql);
     const variant=await queryReadOnly(alt,task.sql);

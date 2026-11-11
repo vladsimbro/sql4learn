@@ -11,7 +11,7 @@ const $=(selector,root=document)=>root.querySelector(selector);
 const PGLITE_URL='https://cdn.jsdelivr.net/npm/@electric-sql/pglite@0.5.15/dist/index.js';
 const state={
   progress:loadProgress(),engineReady:false,engineError:'',db:null,secondaryDB:null,secondaryPromise:null,
-  schema:'orders',filter:'all',activeTaskId:null,result:null,route:null,xrayScenario:'join-fanout',xrayStep:0,xrayResult:null,
+  schema:'orders',filter:'all',activeTaskId:null,result:null,exampleResult:null,route:null,xrayScenario:'join-fanout',xrayStep:0,xrayResult:null,
   playground:(()=>{try{return localStorage.getItem('sql4learn-playground-v1')||"SELECT status,COUNT(*) AS orders_count\nFROM orders\nGROUP BY status;";}catch{return "SELECT * FROM orders;"}})(),
   attempts:{},loading:false
 };
@@ -93,6 +93,28 @@ function updateResults(){
  const feedback=$('#task-feedback'),output=$('#task-result');
  if(feedback)feedback.innerHTML=renderFeedback(state.result||{});
  if(output)output.innerHTML=state.result?.query?renderQueryTable(state.result.query):'';
+}
+async function runLessonExample(id){
+ if(!state.engineReady||!state.db){toast('PostgreSQL ещё запускается.');return;}
+ const lesson=lessonById[id];
+ if(!lesson||state.route?.page!=='lesson'||state.route.id!==id)return;
+ const button=document.querySelector('[data-action="run-example"]');
+ if(button)button.disabled=true;
+ const host=document.querySelector('#lesson-example-result');
+ if(host)host.innerHTML='<div class="feedback info">Выполняем пример в PostgreSQL…</div>';
+ try{
+  const query=await queryReadOnly(state.db,lesson.example);
+  if(state.route?.page!=='lesson'||state.route.id!==id)return;
+  state.exampleResult={lessonId:id,query};
+ }catch(error){
+  if(state.route?.page!=='lesson'||state.route.id!==id)return;
+  state.exampleResult={lessonId:id,error:String(error.message||error)};
+ }finally{
+  if(state.route?.page==='lesson'&&state.route.id===id){
+   render({keepScroll:true});
+   document.getElementById('lesson-example-result')?.scrollIntoView({block:'nearest'});
+  }
+ }
 }
 async function runXray(){
  if(!state.engineReady||!state.db){toast('PostgreSQL ещё запускается.');return;}
@@ -178,6 +200,7 @@ function onClick(event){
  }
  const action=button.dataset.action,id=button.dataset.taskId||currentTaskID(),task=getTask(id);
  if(!action)return;
+ if(action==='run-example'){runLessonExample(button.dataset.exampleId);return;}
  if(action==='xray-run'){runXray();return;}
  if(action==='check'||action==='run'){runQuery(action,id);return;}
  if(action==='hint'&&task){showHint(task);return;}
@@ -234,7 +257,7 @@ function bind(){
   }
   if(event.key==='Escape')toggleMenu(false);
  });
- window.addEventListener('hashchange',()=>{state.result=null;toggleMenu(false);render();try{state.progress.lastRoute=window.location.hash;progressSave();}catch{}});
+ window.addEventListener('hashchange',()=>{state.result=null;state.exampleResult=null;toggleMenu(false);render();try{state.progress.lastRoute=window.location.hash;progressSave();}catch{}});
  $('#import-file').addEventListener('change',importFile);
  window.addEventListener('error',event=>console.error('Ошибка приложения:',event.error||event.message));
 }
