@@ -100,6 +100,10 @@ try{
  await clickHash('#/lesson/group-by');
  assert.equal(await page.locator('.walkthrough-table').count(),2,'GROUP BY must have genuine before-after data tables');
  assert.match(await page.locator('.walkthrough-insight').textContent(),/GROUP BY/,'Explain the visualised change in grain');
+ await page.locator('#sql-editor').fill("SELECT status,COUNT(*) AS orders_count FROM orders WHERE status='cancelled' GROUP BY status");
+ await page.locator('[data-action="check"]').click();
+ await page.locator('#task-feedback .feedback-diff').waitFor({timeout:45000});
+ assert.match(await page.locator('#task-feedback .feedback-diff').textContent(),/строк/,'Course feedback must explain which part differs');
  await clickHash('#/lesson/limit-top');
  await page.locator('.lesson-heading h1').waitFor();
  assert.match(await page.locator('.lesson-heading h1').textContent(),/LIMIT/);
