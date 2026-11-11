@@ -156,7 +156,9 @@ test('Every SQL answer executes on original and adversarial PostgreSQL fixtures'
   const inventoryCounts=await base.query('SELECT (SELECT COUNT(*) FROM inventory.locations) AS locations,(SELECT COUNT(*) FROM inventory.products) AS products,(SELECT COUNT(*) FROM inventory.opening_stock) AS opening,(SELECT COUNT(*) FROM inventory.movements) AS movements,(SELECT COUNT(*) FROM inventory.stocktakes) AS stocktakes');
   assert.deepEqual(Object.values(inventoryCounts.rows[0]).map(Number),[3,4,9,15,12],'Warehouse case must use a separate five-table schema and stock ledger');
   const alternateInventory=await alt.query('SELECT (SELECT COUNT(*) FROM inventory.locations) AS locations,(SELECT COUNT(*) FROM inventory.products) AS products,(SELECT COUNT(*) FROM inventory.opening_stock) AS opening,(SELECT COUNT(*) FROM inventory.movements) AS movements,(SELECT COUNT(*) FROM inventory.stocktakes) AS stocktakes');
-  assert.deepEqual(Object.values(alternateInventory.rows[0]).map(Number),[4,5,12,21,18],'Adversarial fixture adds a warehouse, SKU, negative stock, late postings and recounts');
+  assert.deepEqual(Object.values(alternateInventory.rows[0]).map(Number),[5,5,12,21,18],'Adversarial fixture adds warehouses, SKU, negative stock, late postings and recounts');
+  const emptyWarehouse=await queryReadOnly(alt,independentProjectTaskById['portfolio-inventory-6'].sql);
+  assert.ok(emptyWarehouse.rows.some(row=>Number(row.location_id)===5&&Number(row.counted_positions)===0&&Number(row.discrepant_positions)===0&&Number(row.absolute_gap_units)===0),'Warehouse without any stocktake must survive reconciliation with zero totals');
   const cut=await base.query("SELECT SUM(delta) AS delta FROM inventory.movements WHERE location_id=1 AND product_id=101 AND moved_at<TIMESTAMP '2026-08-10 12:00'");
   assert.equal(Number(cut.rows[0].delta),-3,'Movements exactly at snapshot instant must not count');
   const audit=await queryReadOnly(base,independentProjectTaskById['portfolio-inventory-3'].sql);
