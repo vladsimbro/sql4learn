@@ -17,9 +17,13 @@ import {lessonGuides,modulePedagogy} from '../src/lesson-guides.js';
 const all=[...tasks,...assessmentTasks,...clinicTasks,...independentProjectTasks];
 test('Only real finished lessons are offered, with unique skill and task IDs',()=>{
  assert.equal(modules.length,9);
- assert.equal(lessons.length,44);
- assert.equal(tasks.length,119);
+ assert.equal(lessons.length,58);
+ assert.equal(tasks.length,161);
  assert.equal(assessments.length,6);
+ for(const id of ['text-normalize','text-extract','type-cast','numeric-expr','safe-ratios','keys-relations','cross-join','self-join','set-union','set-compare','not-exists-null','window-lead','window-moving','window-first-last'])assert.ok(lessonById[id],'Missing core SQL subject: '+id);
+ assert.ok(lessons.findIndex(l=>l.id==='keys-relations')<lessons.findIndex(l=>l.id==='inner'),'Teach PK/FK before JOIN');
+ assert.ok(lessons.findIndex(l=>l.id==='type-cast')<lessons.findIndex(l=>l.id==='date-types'),'Teach type conversion before date casts');
+ assert.ok(lessons.findIndex(l=>l.id==='set-union')<lessons.findIndex(l=>l.id==='subquery'),'Teach set operations before correlated subqueries');
  assert.equal(assessmentTasks.length,14);
  assert.deepEqual(assessments.map(a=>a.after),['filter','joins','dates','windows','audit','product'],'Cumulative exams must match the taught curriculum sequence');
  assert.equal(clinicTasks.length,13);
