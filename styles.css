@@ -54,3 +54,20 @@
 .workspace-right .table-scroll{max-height:225px}
 @media(max-width:860px){.independent-project-highlight{grid-template-columns:1fr}.independent-project-symbol{min-height:175px}}
 @media(max-width:480px){.independent-project-highlight{padding:17px}.project-task-tabs{display:grid;grid-template-columns:repeat(3,1fr)}.project-task-tabs .tab{padding:10px 5px;white-space:normal}}
+
+
+/* Spaced retrieval schedule — user-driven, no background notifications. */
+.recall-overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:19px}
+.recall-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+.recall-item{width:100%;min-width:0;text-align:left;display:flex;gap:10px;align-items:center;border:1px solid var(--border);padding:14px;border-radius:12px;background:var(--paper);color:var(--ink)}
+.recall-item .recall-mark{flex:none;width:33px;height:33px;border-radius:10px;background:var(--paper2);color:var(--blue);display:grid;place-items:center;font:700 13px var(--mono)}
+.recall-item-text{flex:1;min-width:0;display:grid;gap:4px}
+.recall-item-text strong{font-size:11px;line-height:1.5}
+.recall-item-text small{font-size:9px;color:var(--muted);line-height:1.5}
+.recall-date{font-size:9px;font-weight:700;color:var(--muted);max-width:65px;text-align:right;line-height:1.5}
+.recall-item.due{border-color:var(--blue);cursor:pointer;background:var(--paper)}
+.recall-item.due .recall-date{color:var(--blue)}
+.recall-item.active,.recall-item.due:hover{background:var(--blue-soft)}
+.recall-item[disabled]{cursor:default;opacity:.75}
+@media(max-width:1200px){.recall-overview{grid-template-columns:repeat(2,1fr)}.recall-list{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){.recall-list{grid-template-columns:1fr}.recall-overview{grid-template-columns:1fr 1fr;gap:8px}.recall-overview .stat{padding:14px}}
