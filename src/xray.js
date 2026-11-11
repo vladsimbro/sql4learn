@@ -1,0 +1,27 @@
+// Four visual experiments execute each stage against real PostgreSQL.
+export const xrayScenarios=[
+ {id:'join-fanout',title:'Почему JOIN удваивает выручку',subtitle:'Зерно заказа превращается в зерно товарной позиции',lesson:'fanout',steps:[
+  {title:'Исходный заказ',grain:'Одна строка = заказ',why:'В orders заказ 1001 встречается один раз, сумма заказа — 1200. Это исходный факт, который нельзя удваивать.',sql:'SELECT order_id,amount FROM orders WHERE order_id=1001'},
+  {title:'Соединяем позиции',grain:'Одна строка = товарная позиция',why:'Теперь у того же заказа две позиции: исходная amount=1200 повторяется в каждой строке. Это не две покупки.',sql:'SELECT o.order_id,o.amount,oi.item_id,oi.quantity FROM orders o JOIN order_items oi ON oi.order_id=o.order_id WHERE o.order_id=1001 ORDER BY oi.item_id'},
+  {title:'Опасная сумма после JOIN',grain:'Одна строка = итог по размноженным строкам',why:'SUM(o.amount) после JOIN считает один заказ дважды и даёт 2400 вместо 1200. Запрос синтаксически верный, но бизнес-метрика неверна.',sql:'SELECT SUM(o.amount) AS wrong_revenue FROM orders o JOIN order_items oi ON oi.order_id=o.order_id WHERE o.order_id=1001'},
+  {title:'Правильное зерно',grain:'Одна строка = итог по одному заказу',why:'Выручку из orders считаем на уровне заказов. Для суммы позиций отдельно свернули бы order_items до order_id.',sql:'SELECT SUM(amount) AS correct_revenue FROM orders WHERE order_id=1001'}
+ ]},
+ {id:'left-join',title:'Как LEFT JOIN сохраняет отсутствие',subtitle:'Магазин без заказов — важная строка отчёта',lesson:'left',steps:[
+  {title:'Все магазины',grain:'Одна строка = магазин',why:'Резервный магазин существует в справочнике, но не имеет заказов. Его нельзя потерять из операционного отчёта.',sql:'SELECT store_id,store_name FROM stores ORDER BY store_id'},
+  {title:'INNER JOIN теряет магазин',grain:'Одна строка = совпадение с заказом',why:'INNER JOIN не возвращает строки без совпадения справа. Резервный исчезает.',sql:'SELECT s.store_name,o.order_id FROM stores s JOIN orders o ON o.store_id=s.store_id WHERE s.store_name=\'Резервный\''},
+  {title:'LEFT JOIN сохраняет строку',grain:'Одна строка = магазин, даже без заказа',why:'LEFT JOIN оставляет Резервный и показывает NULL справа. COUNT(o.order_id) будет ноль, а COUNT(*) — один.',sql:'SELECT s.store_name,o.order_id FROM stores s LEFT JOIN orders o ON o.store_id=s.store_id WHERE s.store_name=\'Резервный\''},
+  {title:'Правильная агрегация',grain:'Одна строка = магазин',why:'Считаем непустые идентификаторы заказов, а не строки соединения. Магазины без заказов получают ноль.',sql:"SELECT s.store_name,COUNT(o.order_id) AS orders_count FROM stores s LEFT JOIN orders o ON o.store_id=s.store_id GROUP BY s.store_id,s.store_name ORDER BY s.store_name"}
+ ]},
+ {id:'group-by',title:'Как GROUP BY меняет зерно',subtitle:'От отдельных заказов к сводке по статусам',lesson:'group-by',steps:[
+  {title:'Исходные факты',grain:'Одна строка = заказ',why:'Каждая сумма относится к отдельному заказу. До группировки заказы не должны исчезать или объединяться.',sql:'SELECT order_id,status,amount FROM orders ORDER BY order_id'},
+  {title:'Фильтрация до агрегации',grain:'Одна строка = доставленный заказ',why:'WHERE удаляет отменённые и незавершённые заказы до вычисления сумм, меняя состав каждой будущей группы.',sql:"SELECT order_id,status,amount FROM orders WHERE status='delivered' ORDER BY order_id"},
+  {title:'Группируем',grain:'Одна строка = статус',why:'GROUP BY объединяет все строки одного статуса. Исходные order_id больше нельзя вывести без агрегирования.',sql:'SELECT status,COUNT(*) AS orders_count,SUM(amount) AS total_amount FROM orders GROUP BY status ORDER BY status'},
+  {title:'Фильтр готовых групп',grain:'Одна строка = подходящий статус',why:'HAVING удаляет группы по уже вычисленному COUNT. Это не то же самое, что WHERE по отдельным заказам.',sql:'SELECT status,COUNT(*) AS orders_count FROM orders GROUP BY status HAVING COUNT(*)>=4 ORDER BY status'}
+ ]},
+ {id:'window',title:'Почему оконная функция сохраняет строки',subtitle:'Добавляем номер покупки, не сворачивая историю',lesson:'row-number',steps:[
+  {title:'История одного клиента',grain:'Одна строка = заказ клиента',why:'У Анны несколько заказов в разное время. Это исходный набор для оконного расчёта.',sql:'SELECT customer_id,order_id,ordered_at FROM orders WHERE customer_id=1 ORDER BY ordered_at,order_id'},
+  {title:'Нумерация внутри группы',grain:'Одна строка = заказ с порядковым номером',why:'ROW_NUMBER добавляет позицию, но сохраняет количество заказов. Порядок задаём явно.',sql:'SELECT customer_id,order_id,ROW_NUMBER() OVER(PARTITION BY customer_id ORDER BY ordered_at,order_id) AS rn FROM orders WHERE customer_id=1'},
+  {title:'Сравни с GROUP BY',grain:'Одна строка = клиент',why:'GROUP BY уничтожает детализацию по заказам и оставляет только одну строку на клиента.',sql:'SELECT customer_id,COUNT(*) AS orders_count FROM orders WHERE customer_id=1 GROUP BY customer_id'}
+ ]}
+];
+export const xrayById=Object.fromEntries(xrayScenarios.map(item=>[item.id,item]));
