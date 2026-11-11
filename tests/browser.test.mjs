@@ -47,6 +47,13 @@ try{
  assert.match(await page.locator('.lesson-heading h1').textContent(),/generate_series/,'Continuous calendar topic must be visible');
  await clickHash('#/exam/checkpoint-dates');
  assert.equal(await page.locator('.lesson-task').count(),1,'Date analytics cumulative exam must be reachable');
+ await clickHash('#/lesson/product-cohorts');
+ await page.locator('.lesson-heading h1').waitFor();
+ assert.match(await page.locator('.lesson-heading h1').textContent(),/Когортный/);
+ await page.locator('[data-schema="app_users"]').click();
+ assert.match(await page.locator('.schema-menu').textContent(),/app_users/);
+ await clickHash('#/exam/checkpoint-product');
+ assert.equal(await page.locator('[data-exam-tab]').count(),3);
  await clickHash('#/playground');
  await page.locator('#sql-editor').fill('DELETE FROM orders;');
  await page.locator('[data-action="run"]').click();
@@ -72,13 +79,13 @@ try{
  await page.locator('#theme-toggle').click();
  assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
  await clickHash('#/practice');
- assert.equal(await page.locator('.exercise-card').count(),73);
+ assert.equal(await page.locator('.exercise-card').count(),91);
  await page.setViewportSize({width:390,height:844});
  await page.locator('#menu-toggle').click();
  assert.ok(await page.locator('#sidebar').evaluate(el=>el.classList.contains('open')),'Mobile navigation should open');
  await page.locator('#sidebar [data-page="course"]').click();
  await page.locator('.module-card').first().waitFor();
- assert.equal(await page.locator('.module-card').count(),7);
+ assert.equal(await page.locator('.module-card').count(),8);
  assert.deepEqual(errors,[],'No runtime JavaScript exceptions');
  console.log('Browser verification passed: live PostgreSQL, correct/incorrect answers, exam integrity, persistence, read-only SQL, theme, mobile navigation.');
 }finally{
