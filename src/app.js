@@ -3,6 +3,7 @@ import {assessments,assessmentTaskById,assessmentById} from './assessments.js';
 import {SEED_SQL,ALTERNATE_SQL} from './data.js';
 import {SUPPORT_SEED_SQL,SUPPORT_ALTERNATE_SQL,SUPPORT_SCHEMA} from './project-data.js';
 import {independentProjectById,independentProjectTaskById} from './portfolio.js';
+import {reviewSkills,reviewSkillById,reviewStatus,reviewTask,advanceReview} from './review-bank.js';
 import {clinicTaskById} from './clinic.js';
 import {xrayById,xrayScenarios} from './xray.js';
 import {loadProgress,storeProgress,exportProgress,importProgress} from './progress.js';
@@ -13,7 +14,7 @@ const $=(selector,root=document)=>root.querySelector(selector);
 const PGLITE_URL='https://cdn.jsdelivr.net/npm/@electric-sql/pglite@0.5.15/dist/index.js';
 const state={
   progress:loadProgress(),engineReady:false,engineError:'',db:null,secondaryDB:null,secondaryPromise:null,
-  schema:'orders',filter:'all',activeTaskId:null,result:null,exampleResult:null,previewTable:null,route:null,xrayScenario:'join-fanout',xrayStep:0,xrayResult:null,
+  schema:'orders',filter:'all',activeTaskId:null,result:null,exampleResult:null,previewTable:null,recallFeedback:null,route:null,xrayScenario:'join-fanout',xrayStep:0,xrayResult:null,
   playground:(()=>{try{return localStorage.getItem('sql4learn-playground-v1')||"SELECT status,COUNT(*) AS orders_count\nFROM orders\nGROUP BY status;";}catch{return "SELECT * FROM orders;"}})(),
   attempts:{},loading:false
 };
@@ -42,6 +43,9 @@ function activeTask(route){
  if(route.page==='lesson'){
   const lesson=lessonById[route.id];
   if(lesson&&!lesson.tasks.some(task=>task.id===state.activeTaskId))state.activeTaskId=lesson.tasks[0]?.id||null;
+ }else if(route.page==='recall'){
+  const due=reviewSkills.filter(skill=>reviewStatus(state.progress,skill).due);
+  if(!due.some(skill=>skill.id===state.activeTaskId))state.activeTaskId=due[0]?.id||null;
  }else if(route.page==='task'||route.page==='fix')state.activeTaskId=route.id;
  else if(route.page==='project'){
   const project=independentProjectById[route.id];
@@ -93,7 +97,7 @@ async function initDatabase(){
   render({keepScroll:true});
  }finally{state.loading=false;}
 }
-function getTask(id){return taskById[id]||assessmentTaskById[id]||clinicTaskById[id]||independentProjectTaskById[id]||null;}
+function getTask(id){return taskById[id]||assessmentTaskById[id]||clinicTaskById[id]||independentProjectTaskById[id]||(reviewSkillById[id]&&reviewStatus(state.progress,reviewSkillById[id]).due?reviewTask(state.progress,reviewSkillById[id]):null);}
 function getEditorText(){return $('#sql-editor')?.value||'';}
 function currentTaskID(){return state.route?.page==='playground'?'playground':state.activeTaskId;}
 function updateResults(){
@@ -162,6 +166,14 @@ async function runQuery(mode,id){
     const grade=await gradeSQL(task,sql,state.db,alt);
     state.attempts[id]=(state.attempts[id]||0)+1;
     if(grade.ok){
+      if(reviewSkillById[id]){
+        state.progress.review[id]=advanceReview(state.progress.review[id],true);
+        state.progress.drafts[id]='';
+        progressSave();
+        const interval=state.progress.review[id].level===1?'1 день':state.progress.review[id].level===2?'3 дня':state.progress.review[id].level===3?'7 дней':'30 дней';
+        state.recallFeedback={ok:true,message:'Задача решена на обоих наборах данных. Следующая проверка этого навыка — примерно через '+interval+'.'};
+        state.result=null;render({keepScroll:true});return;
+      }
       state.progress.completed=[...new Set([...state.progress.completed,id])];progressSave();
       state.result={taskId:id,passed:true,query:grade.actual};
       render({keepScroll:true});
@@ -172,6 +184,12 @@ async function runQuery(mode,id){
     state.result={taskId:id,gradeFailed:true,message:grade.case==='alternate'?
       'На исходных данных ответ верен, но на изменённом наборе — нет. '+outcome.message:outcome.message,
       query:grade.actual};
+    if(reviewSkillById[id]){
+      state.progress.review[id]=advanceReview(state.progress.review[id],false);
+      progressSave();
+      state.recallFeedback={ok:false,message:'Ответ не совпал с эталоном. Навык вернулся к первому интервалу — исправь запрос и попробуй ещё раз.'};
+      render({keepScroll:true});
+    }
   }else{
     const query=await queryReadOnly(state.db,sql);
     state.result={taskId:id,query,message:'Запрос выполнен. Для зачёта нажми «Проверить SQL»: система сравнит результат ещё и с изменёнными данными.'};
@@ -194,7 +212,7 @@ function showSolution(task){
  updateResults();
 }
 function onClick(event){
- const button=event.target.closest('button,[data-schema],[data-task-tab],[data-exam-tab],[data-filter],[data-scroll],[data-xray-scenario],[data-xray-step]');
+ const button=event.target.closest('button,[data-schema],[data-task-tab],[data-exam-tab],[data-project-task],[data-recall-skill],[data-filter],[data-scroll],[data-xray-scenario],[data-xray-step]');
  if(!button)return;
  if(button.id==='menu-toggle'){toggleMenu();return;}
  if(button.id==='theme-toggle'){
@@ -205,6 +223,14 @@ function onClick(event){
  if(button.dataset.xrayScenario){state.xrayScenario=button.dataset.xrayScenario;state.xrayStep=0;state.xrayResult=null;render({keepScroll:true});return;}
  if(button.dataset.xrayStep){const [scenario,index]=button.dataset.xrayStep.split(':');if(xrayById[scenario]?.steps[Number(index)]){state.xrayScenario=scenario;state.xrayStep=Number(index);state.xrayResult=null;render({keepScroll:true});}return;}
  if(button.dataset.filter){state.filter=button.dataset.filter;render({keepScroll:true});return;}
+ if(button.dataset.recallSkill){
+  const skill=reviewSkillById[button.dataset.recallSkill];
+  if(state.route?.page==='recall'&&skill&&reviewStatus(state.progress,skill).due){
+    state.activeTaskId=skill.id;state.result=null;state.recallFeedback=null;
+    render({keepScroll:true});document.getElementById('task-editor')?.scrollIntoView({block:'start'});
+  }
+  return;
+ }
  if(button.dataset.scroll){document.getElementById(button.dataset.scroll)?.scrollIntoView({behavior:'smooth',block:'start'});return;}
  if(button.dataset.taskTab||button.dataset.examTab||button.dataset.projectTask){
   state.activeTaskId=button.dataset.taskTab||button.dataset.examTab||button.dataset.projectTask;state.result=null;
@@ -280,7 +306,7 @@ function bind(){
   }
   if(event.key==='Escape')toggleMenu(false);
  });
- window.addEventListener('hashchange',()=>{state.result=null;state.exampleResult=null;toggleMenu(false);render();try{state.progress.lastRoute=window.location.hash;progressSave();}catch{}});
+ window.addEventListener('hashchange',()=>{state.result=null;state.recallFeedback=null;state.exampleResult=null;toggleMenu(false);render();try{state.progress.lastRoute=window.location.hash;progressSave();}catch{}});
  $('#import-file').addEventListener('change',importFile);
  window.addEventListener('error',event=>console.error('Ошибка приложения:',event.error||event.message));
 }
