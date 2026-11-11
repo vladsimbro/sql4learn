@@ -5,6 +5,7 @@ import {clinicTasks,clinicTaskById} from './clinic.js';
 import {SCHEMA} from './data.js';
 import {SUPPORT_SCHEMA} from './project-data.js';
 import {independentProjects,independentProjectById} from './portfolio.js';
+import {reviewSkills,reviewSkillById,reviewStatus,reviewTask} from './review-bank.js';
 import {mastery} from './progress.js';
 
 export const esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;");
@@ -175,12 +176,52 @@ export function renderExam(state,id){
 export function renderReview(state){
  const exams=assessments.map(a=>({a,p:a.tasks.filter(t=>done(state,t.id)).length}));
  return header('АНАЛИТИКА / ПРОГРЕСС','Твой профиль знаний','Здесь показаны результаты реальной SQL-практики и независимых контрольных, а не количество открытых страниц.')+
+ `<section class="card panel" style="margin-bottom:17px"><div class="between"><div><h2 class="panel-title">Вернись к пройденному</h2><p class="small muted">${reviewSkills.filter(x=>reviewStatus(state.progress,x).due).length} навыков ждут повторения. Следующая проверка предлагается через 1, 3, 7 или 30 дней после успешного решения.</p></div>${button('Повторить SQL','#/recall',true)}</div></section>`+
  `<div class="review-grid"><section class="card panel"><h2 class="panel-title">Навыки по модулям</h2>
  <div class="skill-list">${modules.map(m=>{const p=skill(state,m);return `<div class="skill-row"><strong>${esc(m.title)}</strong><div class="progress-track"><span style="width:${p.percent}%"></span></div><small>${p.passed}/${p.total}</small></div>`}).join('')}</div></section>
  <section class="card panel"><h2 class="panel-title">Накопительные контрольные</h2>
  ${exams.map(({a,p})=>`<div class="mini-step"><span class="step-dot">${p===a.tasks.length?'✓':p+'/'+a.tasks.length}</span><div style="flex:1"><strong>${esc(a.title)}</strong><small>${esc(a.description)}</small></div>${button('Открыть',`#/exam/${a.id}`)}</div>`).join('')}
  <div class="feedback info"><strong>Что означает «освоил»?</strong>Чтение, вопрос на понимание и правильный SQL — разные показатели. Контрольная нужна, чтобы проверить использование нескольких навыков вместе.</div></section></div>`;
 }
+
+export function renderRecall(state){
+ const now=Date.now();
+ const entries=reviewSkills.map(skill=>({skill,status:reviewStatus(state.progress,skill,now)}));
+ const due=entries.filter(item=>item.status.due);
+ const active=due.find(item=>item.skill.id===state.activeTaskId)||due[0];
+ const unlocked=entries.filter(item=>item.status.unlocked).length;
+ const strong=entries.filter(item=>item.status.level>=4).length;
+ const weak=entries.filter(item=>item.status.misses>0&&item.status.unlocked).length;
+ const nextText=(status)=>status.nextDueAt<=now?'Пора повторить':
+   'Через '+Math.max(1,Math.ceil((status.nextDueAt-now)/86400000))+' д.';
+ return header('ПОВТОРЕНИЕ / ПАМЯТЬ О НАВЫКАХ','Повторять — значит уметь','Новые задачи по уже изученным темам. Успешное решение переносит следующее повторение на 1, 3, 7 и 30 дней. Не путай один зачёт с устойчивым навыком.')+
+ `<div class="recall-overview">
+   <div class="card stat"><label>К повторению сейчас</label><strong>${due.length}</strong><small>Доступные повторения</small></div>
+   <div class="card stat"><label>Изученные навыки</label><strong>${unlocked}<span class="muted">/${entries.length}</span></strong><small>Открываются после практики уроков</small></div>
+   <div class="card stat"><label>Пройдено 4 цикла</label><strong>${strong}</strong><small>Проверка раз в 30 дней продолжается</small></div>
+   <div class="card stat"><label>Навыки с ошибками</label><strong>${weak}</strong><small>Ошибки учитываются для повторения</small></div>
+ </div>
+ ${state.recallFeedback?`<div class="feedback ${state.recallFeedback.ok?'success':'error'}" style="margin-bottom:18px"><strong>${state.recallFeedback.ok?'Повторение зачтено':'Нужно закрепить ещё раз'}</strong>${esc(state.recallFeedback.message)}</div>`:''}
+ <div class="recall-list">
+ ${entries.map(({skill,status})=>`<button class="recall-item card ${status.due?'due':''} ${active?.skill.id===skill.id?'active':''}" data-recall-skill="${esc(skill.id)}" ${!status.due?'disabled':''}>
+ <span class="recall-mark">${status.unlocked?(status.level>=4?'✓':status.level+1):'–'}</span>
+ <span class="recall-item-text"><strong>${esc(skill.title)}</strong><small>${esc(skill.category)} · ${status.unlocked?status.level+'/4 успешных цикла':'Откроется после практики урока'}</small></span>
+ <span class="recall-date">${status.unlocked?esc(nextText(status)):'Закрыто'}</span></button>`).join('')}
+ </div>
+ ${active?`<div class="workspace" style="margin-top:20px"><div class="workspace-main">
+  <section class="card panel"><p class="section-eyebrow">ПОВТОРЕНИЕ · ${esc(active.skill.category)}</p>
+   <h2 class="panel-title">${esc(active.skill.title)}</h2>
+   <p class="small muted">Новая формулировка без подсказки. Проверяется реальный SQL на двух наборах данных. После успешного результата следующая версия появится в назначенный интервал.</p>
+   ${pill('Цикл '+(active.status.level+1)+' / 4','neutral')}
+  </section>
+  ${taskEditor(state,reviewTask(state.progress,active.skill),true)}
+ </div><aside class="workspace-right">${schemaPanel(state)}<section class="card side-card"><h3>Почему не каждый день?</h3><p class="small muted" style="line-height:1.8">Повторение привязано к времени после успешного ответа. Ошибка возвращает навык к первому интервалу. На сайт нужно зайти самостоятельно: автоматических уведомлений и фоновой проверки здесь нет.</p></section></aside></div>`:
+ `<section class="card panel" style="margin-top:18px"><h2 class="panel-title">На сегодня новых проверок нет</h2>
+  <p class="small muted">Если навыки ещё не открыты — выполни задачи соответствующих уроков. Если уже повторял, новые задания появятся после истечения интервала. Упражнения основной практики доступны всегда.</p>
+  ${button('Продолжить учебник','#/course',true)} ${button('Практиковаться','#/practice')}</section>`}
+ `;
+}
+
 export function renderProjects(state){
  return header('ПРОЕКТЫ / РЕАЛЬНЫЕ КЕЙСЫ','Аналитическая мастерская','Настоящий самостоятельный кейс на незнакомых данных — отдельно от двух тренировочных историй, собранных из заданий курса.')+
  `<div class="independent-project-highlight card">
@@ -295,6 +336,7 @@ export function renderPage(state,route){
  if(route.page==='task')return {title:taskById[route.id]?.title||'Задача',html:renderStandaloneTask(state,route.id)};
  if(route.page==='exam')return {title:'Контрольная',html:renderExam(state,route.id)};
  if(route.page==='review')return {title:'Мои навыки',html:renderReview(state)};
+ if(route.page==='recall')return {title:'Повторение',html:renderRecall(state)};
  if(route.page==='projects')return {title:'Проекты',html:renderProjects(state)};
  if(route.page==='project')return {title:independentProjectById[route.id]?.title||'Проект',html:renderIndependentProject(state,route.id)};
  if(route.page==='playground')return {title:'SQL-песочница',html:renderPlayground(state)};
