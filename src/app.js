@@ -1,6 +1,8 @@
 import {modules,lessons,tasks,lessonById,taskById,moduleById} from './content.js';
 import {assessments,assessmentTaskById,assessmentById} from './assessments.js';
 import {SEED_SQL,ALTERNATE_SQL} from './data.js';
+import {clinicTaskById} from './clinic.js';
+import {xrayById,xrayScenarios} from './xray.js';
 import {loadProgress,storeProgress,exportProgress,importProgress} from './progress.js';
 import {queryReadOnly,gradeSQL} from './sql.js';
 import {renderPage,renderFeedback,renderQueryTable} from './views.js';
@@ -9,7 +11,7 @@ const $=(selector,root=document)=>root.querySelector(selector);
 const PGLITE_URL='https://cdn.jsdelivr.net/npm/@electric-sql/pglite@0.5.15/dist/index.js';
 const state={
   progress:loadProgress(),engineReady:false,engineError:'',db:null,secondaryDB:null,secondaryPromise:null,
-  schema:'orders',filter:'all',activeTaskId:null,result:null,route:null,
+  schema:'orders',filter:'all',activeTaskId:null,result:null,route:null,xrayScenario:'join-fanout',xrayStep:0,xrayResult:null,
   playground:(()=>{try{return localStorage.getItem('sql4learn-playground-v1')||"SELECT status,COUNT(*) AS orders_count\nFROM orders\nGROUP BY status;";}catch{return "SELECT * FROM orders;"}})(),
   attempts:{},loading:false
 };
@@ -38,7 +40,7 @@ function activeTask(route){
  if(route.page==='lesson'){
   const lesson=lessonById[route.id];
   if(lesson&&!lesson.tasks.some(task=>task.id===state.activeTaskId))state.activeTaskId=lesson.tasks[0]?.id||null;
- }else if(route.page==='task')state.activeTaskId=route.id;
+ }else if(route.page==='task'||route.page==='fix')state.activeTaskId=route.id;
  else if(route.page==='exam'){
   const exam=assessmentById[route.id];
   if(exam&&!exam.tasks.some(task=>task.id===state.activeTaskId))state.activeTaskId=exam.tasks[0]?.id||null;
@@ -46,7 +48,7 @@ function activeTask(route){
 }
 function updateNav(route,title){
  $('#current-page').textContent=title;
- const page=route.page==='lesson'||route.page==='module'?'course':route.page==='task'?'practice':route.page==='exam'?'review':route.page;
+ const page=route.page==='lesson'||route.page==='module'?'course':route.page==='task'?'practice':route.page==='exam'?'review':route.page==='fix'?'clinic':route.page;
  document.querySelectorAll('.primary-nav a').forEach(link=>{
   const active=link.dataset.page===page;link.classList.toggle('active',active);
   if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
@@ -84,13 +86,26 @@ async function initDatabase(){
   render({keepScroll:true});
  }finally{state.loading=false;}
 }
-function getTask(id){return taskById[id]||assessmentTaskById[id]||null;}
+function getTask(id){return taskById[id]||assessmentTaskById[id]||clinicTaskById[id]||null;}
 function getEditorText(){return $('#sql-editor')?.value||'';}
 function currentTaskID(){return state.route?.page==='playground'?'playground':state.activeTaskId;}
 function updateResults(){
  const feedback=$('#task-feedback'),output=$('#task-result');
  if(feedback)feedback.innerHTML=renderFeedback(state.result||{});
  if(output)output.innerHTML=state.result?.query?renderQueryTable(state.result.query):'';
+}
+async function runXray(){
+ if(!state.engineReady||!state.db){toast('PostgreSQL ещё запускается.');return;}
+ const scenario=xrayById[state.xrayScenario],step=scenario?.steps[state.xrayStep];
+ if(!step)return;
+ const id=scenario.id,index=state.xrayStep;
+ try{
+  const query=await queryReadOnly(state.db,step.sql);
+  if(state.xrayScenario!==id||state.xrayStep!==index)return;
+  state.xrayResult={scenario:id,index,query};
+ }catch(error){state.xrayResult={scenario:id,index,error:String(error.message||error)};}
+ render({keepScroll:true});
+ document.getElementById('xray-result')?.scrollIntoView({block:'nearest'});
 }
 async function runQuery(mode,id){
  if(state.loading||!state.engineReady||!state.db){toast('PostgreSQL ещё запускается.');return;}
@@ -140,7 +155,7 @@ function showSolution(task){
  updateResults();
 }
 function onClick(event){
- const button=event.target.closest('button,[data-schema],[data-task-tab],[data-exam-tab],[data-filter],[data-scroll]');
+ const button=event.target.closest('button,[data-schema],[data-task-tab],[data-exam-tab],[data-filter],[data-scroll],[data-xray-scenario],[data-xray-step]');
  if(!button)return;
  if(button.id==='menu-toggle'){toggleMenu();return;}
  if(button.id==='theme-toggle'){
@@ -148,6 +163,8 @@ function onClick(event){
  }
  if(button.id==='export-button'){exportFile();return;}
  if(button.dataset.schema){state.schema=button.dataset.schema;render({keepScroll:true});return;}
+ if(button.dataset.xrayScenario){state.xrayScenario=button.dataset.xrayScenario;state.xrayStep=0;state.xrayResult=null;render({keepScroll:true});return;}
+ if(button.dataset.xrayStep){const [scenario,index]=button.dataset.xrayStep.split(':');if(xrayById[scenario]?.steps[Number(index)]){state.xrayScenario=scenario;state.xrayStep=Number(index);state.xrayResult=null;render({keepScroll:true});}return;}
  if(button.dataset.filter){state.filter=button.dataset.filter;render({keepScroll:true});return;}
  if(button.dataset.scroll){document.getElementById(button.dataset.scroll)?.scrollIntoView({behavior:'smooth',block:'start'});return;}
  if(button.dataset.taskTab||button.dataset.examTab){
@@ -161,6 +178,7 @@ function onClick(event){
  }
  const action=button.dataset.action,id=button.dataset.taskId||currentTaskID(),task=getTask(id);
  if(!action)return;
+ if(action==='xray-run'){runXray();return;}
  if(action==='check'||action==='run'){runQuery(action,id);return;}
  if(action==='hint'&&task){showHint(task);return;}
  if(action==='solution'&&task){showSolution(task);return;}
