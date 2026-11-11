@@ -189,7 +189,7 @@ async function runQuery(mode,id){
     const outcome=grade.case==='alternate'?grade.secondary:grade.primary;
     state.result={taskId:id,gradeFailed:true,message:grade.case==='alternate'?
       'На исходных данных ответ верен, но на изменённом наборе — нет. '+outcome.message:outcome.message,
-      query:grade.actual};
+      query:grade.actual,details:state.route?.page==='lesson'?outcome.details:null};
     if(reviewSkillById[id]){
       state.progress.review[id]=advanceReview(state.progress.review[id],false);
       progressSave();
