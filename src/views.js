@@ -72,7 +72,7 @@ function quiz(state,l){
 }
 const flow={start:['SELECT','Вычисление выражений','Таблица результата'],filter:['FROM','WHERE','SELECT','ORDER BY'],aggregate:['FROM','WHERE','GROUP BY','Агрегаты','HAVING','SELECT'],joins:['FROM','JOIN ... ON','WHERE','SELECT'],cte:['WITH: этапы','Внешний SELECT','Результат'],windows:['Исходные строки','PARTITION BY','ORDER BY','OVER: значение']};
 function flowChart(m){const items=flow[m]||flow.start;return `<div class="flow-steps">${items.map((item,i)=>`${i?'<i>→</i>':''}<span>${esc(item)}</span>`).join('')}</div>`;}
-function taskEditor(state,task){
+function taskEditor(state,task,exam=false){
  const note=state.progress.drafts[task.id]??'',result=state.result?.taskId===task.id?state.result:null;
  return `<section class="card lesson-task" id="task-editor">
   <div class="task-head"><div><p class="task-overline">САМОСТОЯТЕЛЬНЫЙ SQL · ${esc(task.id)}</p><h2>${esc(task.title)}</h2></div>${done(state,task.id)?pill('✓ Решено','teal'):pill('Задача')}</div>
@@ -80,7 +80,7 @@ function taskEditor(state,task){
   <div class="editor-shell"><div class="editor-top"><span>query.sql · PostgreSQL</span><strong>${state.engineReady?'● Готов к запросам':'○ Инициализация'}</strong></div>
   <textarea class="sql-editor" id="sql-editor" spellcheck="false" autocomplete="off" autocapitalize="off" data-draft="${esc(task.id)}" aria-label="SQL-редактор">${esc(note)}</textarea>
   <div class="editor-shortcuts"><span>Ctrl / Cmd + Enter — проверить</span><span>SQL · read only</span></div></div>
-  <div class="task-actions"><button class="btn primary" data-action="check" data-task-id="${esc(task.id)}" ${!state.engineReady?'disabled':''}>Проверить SQL</button><button class="btn" data-action="run" data-task-id="${esc(task.id)}" ${!state.engineReady?'disabled':''}>Выполнить</button><button class="btn" data-action="hint" data-task-id="${esc(task.id)}">Подсказка</button><button class="btn" data-action="solution" data-task-id="${esc(task.id)}">Разобрать решение</button></div>
+  <div class="task-actions"><button class="btn primary" data-action="check" data-task-id="${esc(task.id)}" ${!state.engineReady?'disabled':''}>Проверить SQL</button><button class="btn" data-action="run" data-task-id="${esc(task.id)}" ${!state.engineReady?'disabled':''}>Выполнить</button>${exam?'':`<button class="btn" data-action="hint" data-task-id="${esc(task.id)}">Подсказка</button><button class="btn" data-action="solution" data-task-id="${esc(task.id)}">Разобрать решение</button>`}</div>
   <div id="task-feedback">${result?renderFeedback(result):''}</div><div id="task-result">${result?.query?renderQueryTable(result.query):''}</div>
  </section>`;
 }
@@ -119,7 +119,7 @@ export function renderLesson(state,id){
  return `<a class="crumb-link" href="#/module/${m.id}">← Вернуться к модулю «${esc(m.title)}»</a>
  <div class="workspace"><div class="workspace-main">
  <div class="lesson-heading"><div><p class="section-eyebrow">УРОК ${String(l.lessonIndex+1).padStart(2,'0')} / ${m.lessons.length} · ${esc(m.title)}</p><h1>${esc(l.title)}</h1><p>${esc(l.lead)}</p></div>${pill('SQL · PostgreSQL')}</div>
- <div class="lesson-tools"><a class="tab active" href="#lesson-theory">Объяснение</a><a class="tab" href="#lesson-quiz">Понимание</a><a class="tab" href="#task-editor">Практика</a></div>
+ <div class="lesson-tools"><button class="tab active" data-scroll="lesson-theory">Объяснение</button><button class="tab" data-scroll="lesson-quiz">Понимание</button><button class="tab" data-scroll="task-editor">Практика</button></div>
  <section class="card lesson-section" id="lesson-theory">${objective(l)}<h2>Разберём по шагам</h2>
  ${l.theory.map(p=>`<p>${esc(p)}</p>`).join('')}
  <div class="subtle-line"></div><p class="section-eyebrow">ПРИМЕР ЗАПРОСА</p><pre class="sql-code">${esc(l.example)}</pre>
@@ -157,7 +157,7 @@ export function renderExam(state,id){
  `<div class="workspace"><div class="workspace-main"><section class="card panel"><p class="section-eyebrow">НЕЗАВИСИМАЯ ПРОВЕРКА</p>
  <p class="muted">Задачи объединяют темы из разных уроков. Экзамен не подсказывает алгоритм и использует изменённые контрольные данные.</p>
  <div class="lesson-tools">${exam.tasks.map((t,i)=>`<button class="tab ${t.id===task.id?'active':''}" data-exam-tab="${t.id}">${done(state,t.id)?'✓ ':''}Задача ${i+1}</button>`).join('')}</div></section>
- ${taskEditor(state,task)}</div><aside class="workspace-right">${schemaPanel(state)}<section class="card side-card"><h3>Проверяемые навыки</h3><div class="future-list">${exam.skills.map(s=>`<span>${esc(s)}</span>`).join('')}</div></section></aside></div>`;
+ ${taskEditor(state,task,true)}</div><aside class="workspace-right">${schemaPanel(state)}<section class="card side-card"><h3>Проверяемые навыки</h3><div class="future-list">${exam.skills.map(s=>`<span>${esc(s)}</span>`).join('')}</div></section></aside></div>`;
 }
 export function renderReview(state){
  const exams=assessments.map(a=>({a,p:a.tasks.filter(t=>done(state,t.id)).length}));
