@@ -1,6 +1,8 @@
 import {modules,lessons,tasks,lessonById,taskById,moduleById} from './content.js';
 import {assessments,assessmentTaskById,assessmentById} from './assessments.js';
 import {SEED_SQL,ALTERNATE_SQL} from './data.js';
+import {SUPPORT_SEED_SQL,SUPPORT_ALTERNATE_SQL,SUPPORT_SCHEMA} from './project-data.js';
+import {independentProjectById,independentProjectTaskById} from './portfolio.js';
 import {clinicTaskById} from './clinic.js';
 import {xrayById,xrayScenarios} from './xray.js';
 import {loadProgress,storeProgress,exportProgress,importProgress} from './progress.js';
@@ -11,7 +13,7 @@ const $=(selector,root=document)=>root.querySelector(selector);
 const PGLITE_URL='https://cdn.jsdelivr.net/npm/@electric-sql/pglite@0.5.15/dist/index.js';
 const state={
   progress:loadProgress(),engineReady:false,engineError:'',db:null,secondaryDB:null,secondaryPromise:null,
-  schema:'orders',filter:'all',activeTaskId:null,result:null,exampleResult:null,route:null,xrayScenario:'join-fanout',xrayStep:0,xrayResult:null,
+  schema:'orders',filter:'all',activeTaskId:null,result:null,exampleResult:null,previewTable:null,route:null,xrayScenario:'join-fanout',xrayStep:0,xrayResult:null,
   playground:(()=>{try{return localStorage.getItem('sql4learn-playground-v1')||"SELECT status,COUNT(*) AS orders_count\nFROM orders\nGROUP BY status;";}catch{return "SELECT * FROM orders;"}})(),
   attempts:{},loading:false
 };
@@ -41,6 +43,10 @@ function activeTask(route){
   const lesson=lessonById[route.id];
   if(lesson&&!lesson.tasks.some(task=>task.id===state.activeTaskId))state.activeTaskId=lesson.tasks[0]?.id||null;
  }else if(route.page==='task'||route.page==='fix')state.activeTaskId=route.id;
+ else if(route.page==='project'){
+  const project=independentProjectById[route.id];
+  if(project&&!project.tasks.some(t=>t.id===state.activeTaskId))state.activeTaskId=project.tasks[0]?.id||null;
+ }
  else if(route.page==='exam'){
   const exam=assessmentById[route.id];
   if(exam&&!exam.tasks.some(task=>task.id===state.activeTaskId))state.activeTaskId=exam.tasks[0]?.id||null;
@@ -48,7 +54,7 @@ function activeTask(route){
 }
 function updateNav(route,title){
  $('#current-page').textContent=title;
- const page=route.page==='lesson'||route.page==='module'?'course':route.page==='task'?'practice':route.page==='exam'?'review':route.page==='fix'?'clinic':route.page;
+ const page=route.page==='lesson'||route.page==='module'?'course':route.page==='task'?'practice':route.page==='exam'?'review':route.page==='fix'?'clinic':route.page==='project'?'projects':route.page;
  document.querySelectorAll('.primary-nav a').forEach(link=>{
   const active=link.dataset.page===page;link.classList.toggle('active',active);
   if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
@@ -75,8 +81,9 @@ async function initDatabase(){
   const {PGlite}=await import(PGLITE_URL);
   const database=await PGlite.create();
   await database.exec(SEED_SQL);
+  await database.exec(SUPPORT_SEED_SQL);
   state.db=database;state.engineReady=true;engineStatus(true,'PostgreSQL готов');
-  state.secondaryPromise=(async()=>{const extra=await PGlite.create();await extra.exec(SEED_SQL);await extra.exec(ALTERNATE_SQL);state.secondaryDB=extra;return extra;})();
+  state.secondaryPromise=(async()=>{const extra=await PGlite.create();await extra.exec(SEED_SQL);await extra.exec(ALTERNATE_SQL);await extra.exec(SUPPORT_SEED_SQL);await extra.exec(SUPPORT_ALTERNATE_SQL);state.secondaryDB=extra;return extra;})();
   state.secondaryPromise.catch(error=>{console.error('Контрольная база не запустилась',error);});
   render({keepScroll:true});
  }catch(error){
@@ -86,13 +93,23 @@ async function initDatabase(){
   render({keepScroll:true});
  }finally{state.loading=false;}
 }
-function getTask(id){return taskById[id]||assessmentTaskById[id]||clinicTaskById[id]||null;}
+function getTask(id){return taskById[id]||assessmentTaskById[id]||clinicTaskById[id]||independentProjectTaskById[id]||null;}
 function getEditorText(){return $('#sql-editor')?.value||'';}
 function currentTaskID(){return state.route?.page==='playground'?'playground':state.activeTaskId;}
 function updateResults(){
  const feedback=$('#task-feedback'),output=$('#task-result');
  if(feedback)feedback.innerHTML=renderFeedback(state.result||{});
  if(output)output.innerHTML=state.result?.query?renderQueryTable(state.result.query):'';
+}
+async function previewSchemaTable(tableName){
+ if(!Object.hasOwn(SUPPORT_SCHEMA,tableName)||state.route?.page!=='project')return;
+ if(!state.engineReady||!state.db){toast('PostgreSQL ещё запускается.');return;}
+ try{
+  const query=await queryReadOnly(state.db,'SELECT * FROM '+tableName+' LIMIT 8');
+  if(state.route?.page!=='project')return;
+  state.previewTable={name:tableName,query};
+  render({keepScroll:true});
+ }catch(error){toast('Ошибка исследования данных: '+String(error.message||error).slice(0,160));}
 }
 async function runLessonExample(id){
  if(!state.engineReady||!state.db){toast('PostgreSQL ещё запускается.');return;}
@@ -184,13 +201,13 @@ function onClick(event){
   state.progress.theme=state.progress.theme==='dark'?'light':'dark';progressSave();render({keepScroll:true});return;
  }
  if(button.id==='export-button'){exportFile();return;}
- if(button.dataset.schema){state.schema=button.dataset.schema;render({keepScroll:true});return;}
+ if(button.dataset.schema){state.schema=button.dataset.schema;state.previewTable=null;render({keepScroll:true});return;}
  if(button.dataset.xrayScenario){state.xrayScenario=button.dataset.xrayScenario;state.xrayStep=0;state.xrayResult=null;render({keepScroll:true});return;}
  if(button.dataset.xrayStep){const [scenario,index]=button.dataset.xrayStep.split(':');if(xrayById[scenario]?.steps[Number(index)]){state.xrayScenario=scenario;state.xrayStep=Number(index);state.xrayResult=null;render({keepScroll:true});}return;}
  if(button.dataset.filter){state.filter=button.dataset.filter;render({keepScroll:true});return;}
  if(button.dataset.scroll){document.getElementById(button.dataset.scroll)?.scrollIntoView({behavior:'smooth',block:'start'});return;}
- if(button.dataset.taskTab||button.dataset.examTab){
-  state.activeTaskId=button.dataset.taskTab||button.dataset.examTab;state.result=null;
+ if(button.dataset.taskTab||button.dataset.examTab||button.dataset.projectTask){
+  state.activeTaskId=button.dataset.taskTab||button.dataset.examTab||button.dataset.projectTask;state.result=null;
   render({keepScroll:true});document.getElementById('task-editor')?.scrollIntoView({block:'start'});return;
  }
  if(button.dataset.quiz!==undefined){
@@ -200,6 +217,7 @@ function onClick(event){
  }
  const action=button.dataset.action,id=button.dataset.taskId||currentTaskID(),task=getTask(id);
  if(!action)return;
+ if(action==='preview-schema'){previewSchemaTable(button.dataset.tableName);return;}
  if(action==='run-example'){runLessonExample(button.dataset.exampleId);return;}
  if(action==='xray-run'){runXray();return;}
  if(action==='check'||action==='run'){runQuery(action,id);return;}
@@ -219,6 +237,11 @@ function updatePlayground(){
  try{localStorage.setItem('sql4learn-playground-v1',state.playground);}catch{}
 }
 function onInput(event){
+ if(event.target?.id==='project-notes'){
+  const id=event.target.dataset.projectId;
+  if(independentProjectById[id]){state.progress.projectNotes[id]=event.target.value.slice(0,4000);progressSave();}
+  return;
+ }
  if(event.target?.id!=='sql-editor')return;
  const key=event.target.dataset.draft;
  if(key==='playground'){state.playground=event.target.value;try{localStorage.setItem('sql4learn-playground-v1',state.playground);}catch{}}

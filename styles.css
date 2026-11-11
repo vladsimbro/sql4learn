@@ -28,3 +28,29 @@
 .xray-explain strong{font-size:12px}.xray-explain p{font-size:11px;line-height:1.85;color:var(--muted);margin:7px 0 0}
 @media(max-width:1180px){.xray-scene-list{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.xray-scene-list{grid-template-columns:1fr}.xray-step-nav{grid-template-columns:repeat(2,1fr)}}
+
+
+/* Independent end-to-end analyst project, distinct from collections of lesson exercises. */
+.independent-project-highlight{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(190px,.65fr);gap:22px;align-items:center;background:linear-gradient(118deg,var(--paper) 0%,var(--paper2) 75%);padding:28px 30px;overflow:hidden}
+.independent-project-copy{min-width:0}.independent-project-copy h2{font-size:clamp(21px,2.3vw,30px);line-height:1.32;letter-spacing:-.75px;margin:7px 0}
+.independent-project-copy>p:not(.section-eyebrow){max-width:72ch;color:var(--muted);font-size:12px;line-height:1.9}
+.project-feature-meta,.project-summary{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:15px 0 20px}
+.independent-project-symbol{background:#14233f;border-radius:17px;min-height:215px;display:flex;flex-direction:column;justify-content:space-between;padding:21px 25px;color:#85e3d3;font:11px var(--mono);letter-spacing:1px}
+.independent-project-symbol strong{font:800 clamp(26px,2.7vw,40px)/1.1 var(--font);letter-spacing:-1px;color:#edf8ff}
+.independent-project-symbol span:last-child{font-size:10px;color:#aab8d1}
+.project-paragraph{color:var(--muted);line-height:1.9;font-size:12px}
+.project-rules{margin:12px 0 20px;padding-left:23px;color:var(--ink);font-size:11px;line-height:1.8}
+.project-rules li{margin:9px 0}
+.project-deliverables{margin-top:16px}
+.project-task-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 18px}
+.project-task-tabs .tab{min-height:39px}
+.project-notes{margin-top:16px}
+.project-notes label{display:block;font-weight:800;font-size:11px;margin:13px 0 8px}
+.project-notes textarea{width:100%;resize:vertical;background:var(--paper2);color:var(--ink);border:1px solid var(--border);border-radius:12px;padding:13px;font-size:12px;line-height:1.75;min-height:155px}
+.project-notes textarea:focus-visible{outline:3px solid #98a9ff;outline-offset:2px}
+.project-notes .project-summary{margin-bottom:0}
+.workspace-right .schema-menu button{overflow-wrap:anywhere;text-align:left}
+.workspace-right .result-box{max-width:100%}
+.workspace-right .table-scroll{max-height:225px}
+@media(max-width:860px){.independent-project-highlight{grid-template-columns:1fr}.independent-project-symbol{min-height:175px}}
+@media(max-width:480px){.independent-project-highlight{padding:17px}.project-task-tabs{display:grid;grid-template-columns:repeat(3,1fr)}.project-task-tabs .tab{padding:10px 5px;white-space:normal}}

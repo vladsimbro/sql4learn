@@ -6,10 +6,12 @@ import {assessments,assessmentTasks} from '../src/assessments.js';
 import {clinicTasks} from '../src/clinic.js';
 import {xrayScenarios} from '../src/xray.js';
 import {SEED_SQL,ALTERNATE_SQL,SCHEMA} from '../src/data.js';
+import {SUPPORT_SCHEMA,SUPPORT_SEED_SQL,SUPPORT_ALTERNATE_SQL} from '../src/project-data.js';
+import {independentProjects,independentProjectTasks,independentProjectTaskById} from '../src/portfolio.js';
 import {splitSQL,ensureSelect,queryReadOnly,compareResults,gradeSQL} from '../src/sql.js';
 import {initialProgress,normalizeProgress,exportProgress,importProgress,mastery} from '../src/progress.js';
 
-const all=[...tasks,...assessmentTasks,...clinicTasks];
+const all=[...tasks,...assessmentTasks,...clinicTasks,...independentProjectTasks];
 test('Only real finished lessons are offered, with unique skill and task IDs',()=>{
  assert.equal(modules.length,9);
  assert.equal(lessons.length,41);
@@ -23,6 +25,11 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
  assert.equal(new Set(all.map(x=>x.id)).size,all.length);
  assert.ok(upcomingModules.length>=3);
  assert.equal(projects.length,2);
+ assert.equal(independentProjects.length,1,'Release includes a genuinely independent project rather than relabelled lesson tasks');
+ assert.equal(independentProjectTasks.length,6);
+ assert.equal(Object.keys(SUPPORT_SCHEMA).length,4);
+ assert.ok(independentProjectTaskById['portfolio-support-6'].ordered);
+ for(const task of independentProjectTasks){assert.ok(task.prompt.length>65&&task.deliverable.length>45,task.id+' needs business requirements and testable output contract');}
  for(const project of projects){assert.equal(project.taskIds.length,4);for(const id of project.taskIds)assert.ok(taskById[id],project.id+' references an unknown task');}
  assert.ok(lessons[0].tasks.length>=2);
  for(const lesson of lessons){
@@ -63,11 +70,14 @@ test('Comparison accepts equivalent ordering when not required, but not duplicat
  assert.equal(compareResults({fields:[{name:'other'}],rows:[]},expected).type,'columns');
 });
 test('Progress is scoped to authored IDs and backups cannot import arbitrary state',()=>{
- const source={completed:['start-1','start-1','evil','checkpoint-1a'],read:['first-query','evil'],quiz:{'first-query':0,evil:100},drafts:{'start-1':'SELECT 1',evil:'DROP TABLE orders'},theme:'dark'};
+ const source={completed:['start-1','start-1','evil','checkpoint-1a','portfolio-support-1'],read:['first-query','evil'],quiz:{'first-query':0,evil:100},drafts:{'start-1':'SELECT 1','portfolio-support-1':'SELECT 42',evil:'DROP TABLE orders'},projectNotes:{'support-ops':'SLA и распределение нагрузок проверены.','fake-project':'bad'},theme:'dark'};
  const progress=normalizeProgress(source);
- assert.deepEqual(progress.completed,['start-1','checkpoint-1a']);
+ assert.deepEqual(progress.completed,['start-1','checkpoint-1a','portfolio-support-1']);
  assert.deepEqual(progress.read,['first-query']);
- assert.deepEqual(progress.drafts,{'start-1':'SELECT 1'});
+ assert.deepEqual(progress.drafts,{'start-1':'SELECT 1','portfolio-support-1':'SELECT 42'});
+ assert.deepEqual(progress.projectNotes,{'support-ops':'SLA и распределение нагрузок проверены.'});
+ assert.deepEqual(importProgress(exportProgress(source)).projectNotes,progress.projectNotes);
+ assert.deepEqual(normalizeProgress({version:1,completed:['start-1']}).projectNotes,{},'Older backup remains valid after new project notes are introduced');
  assert.equal(importProgress(exportProgress(source)).theme,'dark');
  assert.throws(()=>importProgress('{"product":"other","format":1,"progress":{}}'));
  assert.equal(mastery(progress,lessonById['first-query']).completed,1);
@@ -79,6 +89,15 @@ test('Every SQL answer executes on original and adversarial PostgreSQL fixtures'
   await base.exec(SEED_SQL);
   await alt.exec(SEED_SQL);
   await alt.exec(ALTERNATE_SQL);
+  await base.exec(SUPPORT_SEED_SQL);
+  await alt.exec(SUPPORT_SEED_SQL);
+  await alt.exec(SUPPORT_ALTERNATE_SQL);
+  const supportCounts=await base.query('SELECT (SELECT COUNT(*) FROM support.clients) AS clients,(SELECT COUNT(*) FROM support.agents) AS agents,(SELECT COUNT(*) FROM support.tickets) AS tickets,(SELECT COUNT(*) FROM support.ticket_events) AS events');
+  assert.deepEqual(Object.values(supportCounts.rows[0]).map(Number),[6,5,16,38],'Initial project is an independent, grounded business dataset');
+  const altSupportCounts=await alt.query('SELECT (SELECT COUNT(*) FROM support.clients) AS clients,(SELECT COUNT(*) FROM support.agents) AS agents,(SELECT COUNT(*) FROM support.tickets) AS tickets,(SELECT COUNT(*) FROM support.ticket_events) AS events');
+  assert.deepEqual(Object.values(altSupportCounts.rows[0]).map(Number),[8,6,20,50],'Second dataset must change staff, clients, tickets and event history');
+  const exactly60=await base.query("SELECT EXTRACT(EPOCH FROM ((SELECT MIN(event_at) FROM support.ticket_events WHERE ticket_id=3016 AND event_type='reply')-(SELECT opened_at FROM support.tickets WHERE ticket_id=3016)))/60 AS minutes");
+  assert.equal(Number(exactly60.rows[0].minutes),60,'SLA cutoff must include the exact boundary');
   const rowCounts=await base.query('SELECT (SELECT COUNT(*) FROM orders) AS orders_count, (SELECT COUNT(*) FROM stores) AS stores_count');
   assert.equal(Number(rowCounts.rows[0].orders_count),18);
   assert.equal(Number(rowCounts.rows[0].stores_count),6);
@@ -126,6 +145,12 @@ test('Every SQL answer executes on original and adversarial PostgreSQL fixtures'
     const broken=await gradeSQL(clinic,clinic.brokenSQL,base,alt);
     assert.equal(broken.ok,false,clinic.id+' broken query must actually be wrong');
   }
+  const brittle=await gradeSQL(independentProjectTaskById['portfolio-support-1'],
+    'SELECT a.agent_id,a.agent_name,COUNT(t.ticket_id) AS tickets_count FROM support.agents a JOIN support.tickets t ON t.agent_id=a.agent_id GROUP BY a.agent_id,a.agent_name',base,alt);
+  assert.equal(brittle.ok,false,'Project must reject a plausible but invalid INNER JOIN that drops agents without tickets');
+  const oldBacklog=await queryReadOnly(base,independentProjectTaskById['portfolio-support-6'].sql);
+  const newBacklog=await queryReadOnly(alt,independentProjectTaskById['portfolio-support-6'].sql);
+  assert.equal(oldBacklog.rows.length+1,newBacklog.rows.length,'Alternate dataset must expose hard-coded overdue queue counts');
   const incorrect=await gradeSQL(taskById['filter-2'],"SELECT order_id,status FROM orders WHERE status='cancelled'",base,alt);
   assert.equal(incorrect.ok,false);
   await assert.rejects(()=>queryReadOnly(base,"WITH changed AS (UPDATE orders SET amount=0 RETURNING order_id) SELECT * FROM changed"),/read-only|read only|cannot execute/i);
