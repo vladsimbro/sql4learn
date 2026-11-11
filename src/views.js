@@ -1,4 +1,4 @@
-import {modules,lessons,tasks,lessonById,taskById,moduleById,upcomingModules,project} from './content.js';
+import {modules,lessons,tasks,lessonById,taskById,moduleById,upcomingModules,projects} from './content.js';
 import {assessments,assessmentById} from './assessments.js';
 import {xrayScenarios,xrayById} from './xray.js';
 import {clinicTasks,clinicTaskById} from './clinic.js';
@@ -72,7 +72,7 @@ function quiz(state,l){
  <div class="question-options">${l.quiz.choices.map((text,i)=>`<button class="option ${hasAnswer&&selection===i?(i===l.quiz.correct?'correct':'wrong'):''}" data-quiz="${i}" data-lesson="${l.id}"><span>${String.fromCharCode(65+i)}</span>${esc(text)}</button>`).join('')}</div>
  ${hasAnswer?`<div class="feedback ${selection===l.quiz.correct?'success':'error'}"><strong>${selection===l.quiz.correct?'Верно.':'Есть ошибка — попробуй ещё раз.'}</strong>${esc(l.quiz.why)}</div>`:''}</section>`;
 }
-const flow={start:['SELECT','Вычисление выражений','Таблица результата'],filter:['FROM','WHERE','SELECT','ORDER BY'],aggregate:['FROM','WHERE','GROUP BY','Агрегаты','HAVING','SELECT'],dates:['Календарные границы','FROM / generate_series','JOIN / WHERE','GROUP BY период','SELECT'],joins:['FROM','JOIN ... ON','WHERE','SELECT'],cte:['WITH: этапы','Внешний SELECT','Результат'],windows:['Исходные строки','PARTITION BY','ORDER BY','OVER: значение']};
+const flow={start:['SELECT','Вычисление выражений','Таблица результата'],filter:['FROM','WHERE','SELECT','ORDER BY'],aggregate:['FROM','WHERE','GROUP BY','Агрегаты','HAVING','SELECT'],dates:['Календарные границы','FROM / generate_series','JOIN / WHERE','GROUP BY период','SELECT'],joins:['FROM','JOIN ... ON','WHERE','SELECT'],cte:['WITH: этапы','Внешний SELECT','Результат'],windows:['Исходные строки','PARTITION BY','ORDER BY','OVER: значение'],product:['События','Зерно и уникальные люди','JOIN / CTE','Когорта / канал','Агрегаты и метрика']};
 function flowChart(m){const items=flow[m]||flow.start;return `<div class="flow-steps">${items.map((item,i)=>`${i?'<i>→</i>':''}<span>${esc(item)}</span>`).join('')}</div>`;}
 function taskEditor(state,task,exam=false){
  const note=state.progress.drafts[task.id]??task.brokenSQL??'',result=state.result?.taskId===task.id?state.result:null;
@@ -171,14 +171,19 @@ export function renderReview(state){
  <div class="feedback info"><strong>Что означает «освоил»?</strong>Чтение, вопрос на понимание и правильный SQL — разные показатели. Контрольная нужна, чтобы проверить использование нескольких навыков вместе.</div></section></div>`;
 }
 export function renderProjects(state){
- const p=project;
- return header('ПРОЕКТЫ / РЕАЛЬНЫЕ КЕЙСЫ','Аналитическая мастерская','Не разрозненные команды, а бизнес-задачи, для которых нужно выбрать подходящую стратегию.')+
- `<section class="card project-hero"><div><p class="section-eyebrow">ПЕРВЫЙ РЕАЛИЗОВАННЫЙ КЕЙС</p><h2>${esc(p.title)}</h2>
- <p>${esc(p.lead)}</p>
- ${pill('4 связанных этапа','teal')} ${button('Начать исследование',`#/task/${p.taskIds[0]}`,true)}</div><div class="project-art"><b>DELIVERY_PULSE</b><br>orders: 18<br>stores: 6<br>customers: 10<br>CHECK_METRICS: ✓</div></section>
- <section class="card panel" style="margin-top:16px"><h2 class="panel-title">Этапы исследования</h2>
- <div class="lesson-list">${p.taskIds.map((id,i)=>{const t=taskById[id];return `<a class="${done(state,id)?'done':''}" href="#/task/${id}"><span class="lesson-number">${String(i+1).padStart(2,'0')}</span><span>${esc(t?.title||id)}</span><small>${done(state,id)?'✓ Выполнено':'Открыть'}</small></a>`}).join('')}</div>
- <p class="small muted" style="line-height:1.75">Проект пока использует проверяемые задачи курса как этапы исследования. Расширенный самостоятельный проект с новой базой и письменной защитой запланирован на следующий релиз.</p></section>`;
+ return header('ПРОЕКТЫ / РЕАЛЬНЫЕ КЕЙСЫ','Аналитическая мастерская','Два разных бизнеса и два независимых набора таблиц. Кейсы объединяют навыки в логичную историю, но пока используют задания курса.')+
+ `<div class="colgap">${projects.map((p,i)=>`
+  <section class="card project-hero"><div><p class="section-eyebrow">АНАЛИТИЧЕСКИЙ КЕЙС ${String(i+1).padStart(2,'0')}</p><h2>${esc(p.title)}</h2>
+  <p>${esc(p.lead)}</p>
+  ${pill(p.taskIds.filter(id=>done(state,id)).length+'/'+p.taskIds.length+' этапов пройдено','teal')}
+  ${button('Открыть кейс',`#/task/${p.taskIds[0]}`,true)}</div>
+  <div class="project-art"><b>${esc(p.id.toUpperCase().replaceAll('-','_'))}</b><br>
+  ${i===0?'orders: 18<br>stores: 6<br>customers: 10':'app_users: 13<br>user_events: 39<br>product funnels'}
+  <br>SQL VERIFIED: ✓</div></section>
+  <section class="card panel"><h2 class="panel-title">${esc(p.subtitle)} — этапы</h2><div class="lesson-list">
+   ${p.taskIds.map((id,n)=>{const t=taskById[id];return `<a class="${done(state,id)?'done':''}" href="#/task/${id}"><span class="lesson-number">${String(n+1).padStart(2,'0')}</span><span>${esc(t?.title||id)}</span><small>${done(state,id)?'✓ Выполнено':'Открыть'}</small></a>`}).join('')}
+  </div></section>`).join('')}</div>
+ <section class="card panel" style="margin-top:17px"><p class="small muted" style="line-height:1.8">Оба кейса сейчас объединяют реальные проверяемые задачи уже изученных модулей. Самостоятельные большие проекты с отдельной защитой расчётов и незнакомыми данными — отдельный следующий этап, не заявляем их готовыми заранее.</p></section>`;
 }
 export function renderPlayground(state){
  const output=state.result?.taskId==='playground'?state.result:null;

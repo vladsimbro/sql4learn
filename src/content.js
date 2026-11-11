@@ -242,7 +242,64 @@ export const modules=[
     T("win-8","Накопленный оборот магазина","Для каждого заказа покажи номер, идентификатор магазина и сумму running_store_total заказов этого магазина нарастающим итогом по времени и номеру.","SELECT order_id,store_id,SUM(amount) OVER(PARTITION BY store_id ORDER BY ordered_at,order_id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_store_total FROM orders;"),
     T("win-9","Нумерация истории","Покажи покупателя, номер заказа и порядковый номер покупки purchase_no внутри истории каждого клиента по времени и номеру заказа.","SELECT customer_id,order_id,ROW_NUMBER() OVER(PARTITION BY customer_id ORDER BY ordered_at,order_id) AS purchase_no FROM orders;")
   ],"Накопительная сумма по сырым заказам и накопительная сумма по дням — разные таблицы результатов. Для дневной динамики сначала агрегируй заказы по дням, затем применяй окно.")
+ ]) ,
+ M("product","Продуктовая аналитика","События пользователей, конверсии, когорты, выручка и проверки качества.","08",[
+  L("product-events","События и уникальные пользователи","У одного пользователя могут быть десятки событий, но сам пользователь один.",[
+    "Новая учебная база — мобильный сервис. В app_users одна строка соответствует пользователю, в user_events — одному событию: просмотр, добавление в корзину или покупка. Сначала зафиксируй, что именно считаешь, иначе COUNT(*) из таблицы событий ошибочно назовёшь числом пользователей.",
+    "DAU — число уникальных активных пользователей за день при заранее определённом событии активности. В этом уроке активностью считается любое событие. COUNT(DISTINCT user_id) позволяет не считать многократные действия одного человека несколько раз."
+  ],"SELECT event_at::date AS day,\n COUNT(DISTINCT user_id) AS active_users\nFROM user_events\nGROUP BY event_at::date\nORDER BY day;",
+  "Почему COUNT(*) из user_events не равен числу активных пользователей?",["Потому что в PostgreSQL COUNT не работает с событиями","Один пользователь может совершить много событий","Потому что время хранится текстом"],1,"Количество событий и количество уникальных людей — разные бизнес-показатели.",[
+    T("product-1","Все события","Посчитай общее количество записанных событий продукта. Назови результат events_count.","SELECT COUNT(*) AS events_count FROM user_events;"),
+    T("product-2","Активная аудитория","Определи число разных пользователей, которые совершили хотя бы одно событие за весь доступный период. Назови результат active_users.","SELECT COUNT(DISTINCT user_id) AS active_users FROM user_events;"),
+    T("product-3","Дневная активность","По каждому дню, когда были события, верни дату day и число уникальных активных пользователей active_users, по возрастанию даты.","SELECT event_at::date AS day,COUNT(DISTINCT user_id) AS active_users FROM user_events GROUP BY event_at::date ORDER BY day;",true)
+  ],"Одна строка user_events — событие, а не человек. Случайный JOIN событий и покупок может размножить обе таблицы: изучай зерно источника до вычисления любого KPI."),
+  L("product-funnel","Воронка: кто дошёл до покупки","От количества кликов переходим к поведению людей.",[
+    "У продукта есть события view, add_to_cart и purchase. Простая «охватная» воронка показывает, сколько уникальных пользователей когда-либо совершали каждый тип события. Это ещё не строгая последовательная воронка: она не требует, чтобы действие произошло после предыдущего шага и в определённое окно времени.",
+    "EXISTS помогает отвечать на вопросы об участии: был ли у пользователя хотя бы один просмотр, покупка, добавление в корзину. Такой подход сохраняет одну строку на пользователя, даже если события повторяются."
+  ],"SELECT event_type,\n COUNT(DISTINCT user_id) AS users_count\nFROM user_events\nGROUP BY event_type;",
+  "Можно ли назвать COUNT(DISTINCT user_id) по каждому типу события полноценной последовательной воронкой?",["Да, порядок событий не важен","Нет, не проверено время и порядок переходов","Да, если событий больше десяти"],1,"Охват шагов и последовательная воронка — разные понятия. Для строгой воронки понадобится проверить порядок событий.",[
+    T("product-4","Охват шагов продукта","Для каждого типа события посчитай количество различных пользователей users_count. Покажи название типа и значение.","SELECT event_type,COUNT(DISTINCT user_id) AS users_count FROM user_events GROUP BY event_type;"),
+    T("product-5","Первый платёж","Подготовь идентификаторы пользователей, совершивших хотя бы одну покупку.","SELECT DISTINCT user_id FROM user_events WHERE event_type='purchase';"),
+    T("product-6","Начали, но не купили","Найди идентификаторы пользователей, которые хотя бы раз просматривали товары, но ни разу не совершали покупку.","SELECT u.user_id FROM app_users u WHERE EXISTS(SELECT 1 FROM user_events e WHERE e.user_id=u.user_id AND e.event_type='view') AND NOT EXISTS(SELECT 1 FROM user_events e WHERE e.user_id=u.user_id AND e.event_type='purchase');")
+  ],"Не смешивай просмотр, пользователя, сессию и покупку в одном знаменателе. Метрика конверсии корректна только тогда, когда числитель и знаменатель относятся к одной единице анализа."),
+  L("product-conversion","Конверсия и правильный знаменатель","Процент может быть вычислен математически правильно и всё равно говорить не то.",[
+    "Определим конверсию зарегистрированных в платящих: число уникальных пользователей с хотя бы одной покупкой, разделённое на число зарегистрированных пользователей за доступный период. Считать нужно людей, а не количество событий purchase.",
+    "При группировке по рекламному каналу LEFT JOIN сохраняет зарегистрированных людей без событий. COUNT(DISTINCT u.user_id) служит знаменателем; FILTER по покупкам — числителем. Используй NULLIF для защиты деления на ноль и дробную арифметику, чтобы не потерять проценты."
+  ],"SELECT u.channel,\n COUNT(DISTINCT u.user_id) AS signups,\n COUNT(DISTINCT u.user_id) FILTER(WHERE e.event_type='purchase') AS payers\nFROM app_users u\nLEFT JOIN user_events e ON e.user_id=u.user_id\nGROUP BY u.channel;",
+  "Почему количество событий purchase нельзя напрямую делить на число зарегистрированных людей?",["Одному человеку может принадлежать несколько покупок","Все зарегистрированные обязаны покупать","COUNT(DISTINCT) всегда равен COUNT(*)"],0,"Один покупатель может совершить много платежей, но остаётся одним платящим пользователем.",[
+    T("product-7","Покупатели по каналам","Для каждого канала привлечения посчитай зарегистрированных пользователей signups и число уникальных купивших payers. Покажи канал и оба показателя.","SELECT u.channel,COUNT(DISTINCT u.user_id) AS signups,COUNT(DISTINCT u.user_id) FILTER(WHERE e.event_type='purchase') AS payers FROM app_users u LEFT JOIN user_events e ON e.user_id=u.user_id GROUP BY u.channel;"),
+    T("product-8","Общая конверсия в покупку","Рассчитай процент зарегистрированных пользователей, которые совершили хотя бы одну покупку. Назови результат purchase_rate_pct, округли до двух знаков после запятой.","SELECT ROUND(100.0*COUNT(DISTINCT u.user_id) FILTER(WHERE e.event_type='purchase')/NULLIF(COUNT(DISTINCT u.user_id),0),2) AS purchase_rate_pct FROM app_users u LEFT JOIN user_events e ON e.user_id=u.user_id;"),
+    T("product-9","Конверсия каналов","Для каждого канала привлечения выведи channel и процент зарегистрированных, совершивших хотя бы одну покупку purchase_rate_pct, с округлением до двух десятичных знаков.","SELECT u.channel,ROUND(100.0*COUNT(DISTINCT u.user_id) FILTER(WHERE e.event_type='purchase')/NULLIF(COUNT(DISTINCT u.user_id),0),2) AS purchase_rate_pct FROM app_users u LEFT JOIN user_events e ON e.user_id=u.user_id GROUP BY u.channel;")
+  ],"Конверсия зарегистрированных в покупку — метрика за весь период в доступной базе, а не кумулятивный retention или конверсия сессий. Для сравнения каналов дополнительно фиксируй временное окно и зрелость когорт."),
+  L("product-cohorts","Когортный анализ и удержание","Сравнивай активность людей, зарегистрированных в одном месяце.",[
+    "Когорта — набор пользователей с общим временем старта. Здесь пользователи группируются по месяцу регистрации. В отчёте удержания важна разница между месяцем регистрации и месяцем активности, а не просто активность в каком-либо календарном месяце.",
+    "Для Month-1 Retention пользователь должен совершить хотя бы одно событие в следующем календарном месяце после регистрации. В знаменатель входят все пользователи исходной когорты, даже если ни разу не пользовались сервисом после регистрации. Историю неполных когорт следует интерпретировать осторожно."
+  ],"SELECT DATE_TRUNC('month',u.signup_date)::date AS cohort_month,\n COUNT(DISTINCT u.user_id) AS cohort_size,\n COUNT(DISTINCT e.user_id) FILTER(\n  WHERE DATE_TRUNC('month',e.event_at)=DATE_TRUNC('month',u.signup_date)+INTERVAL '1 month'\n ) AS retained_m1\nFROM app_users u LEFT JOIN user_events e ON e.user_id=u.user_id\nGROUP BY DATE_TRUNC('month',u.signup_date)::date;",
+  "Какой знаменатель нужен для удержания когорты в следующем месяце?",["Количество событий в следующем месяце","Количество уникальных пользователей исходной когорты","Все пользователи, когда-либо покупавшие"],1,"В retention сравнивают вернувшихся пользователей с постоянным размером стартовой когорты.",[
+    T("product-10","Размер когорт","Посчитай число зарегистрированных пользователей для каждого месяца регистрации. Покажи начало месяца cohort_month и размер cohort_size.","SELECT DATE_TRUNC('month',signup_date)::date AS cohort_month,COUNT(*) AS cohort_size FROM app_users GROUP BY DATE_TRUNC('month',signup_date)::date;"),
+    T("product-11","Месяц активности когорты","Для каждого сочетания месяца регистрации cohort_month и месяца события activity_month рассчитай число различных активных пользователей active_users.","SELECT DATE_TRUNC('month',u.signup_date)::date AS cohort_month,DATE_TRUNC('month',e.event_at)::date AS activity_month,COUNT(DISTINCT e.user_id) AS active_users FROM app_users u JOIN user_events e ON e.user_id=u.user_id GROUP BY DATE_TRUNC('month',u.signup_date)::date,DATE_TRUNC('month',e.event_at)::date;"),
+    T("product-12","Month-1 Retention","Для каждой когорты выведи месяц регистрации cohort_month, число участников cohort_size и число активных пользователей в следующем календарном месяце retained_m1. Сохрани когорты с нулём вернувшихся.","SELECT DATE_TRUNC('month',u.signup_date)::date AS cohort_month,COUNT(DISTINCT u.user_id) AS cohort_size,COUNT(DISTINCT e.user_id) FILTER(WHERE DATE_TRUNC('month',e.event_at)=DATE_TRUNC('month',u.signup_date)+INTERVAL '1 month') AS retained_m1 FROM app_users u LEFT JOIN user_events e ON e.user_id=u.user_id GROUP BY DATE_TRUNC('month',u.signup_date)::date;")
+  ],"Month-1 Retention считают по людям, не по событиям. Размер когорты нельзя уменьшать до числа пользователей с событиями, иначе показатель удержания искусственно вырастет."),
+  L("product-revenue","Выручка и повторные покупки","Различаем платящих людей, платежи и деньги.",[
+    "В user_events каждая purchase-строка — одна покупка с суммой amount. Один пользователь может платить несколько раз. Поэтому count событий purchase, count уникальных платящих и sum денежных сумм — три разных показателя.",
+    "При соединении app_users с user_events канал можно использовать как сегмент выручки. Не суммируй суммы после дополнительных независимых JOIN один-ко-многим: повторная деталь может раздуть деньги. Для анализа месячной выручки группируй по событию оплаты, а не по месяцу регистрации."
+  ],"SELECT u.channel,\n COALESCE(SUM(e.amount) FILTER(WHERE e.event_type='purchase'),0) AS revenue\nFROM app_users u LEFT JOIN user_events e ON e.user_id=u.user_id\nGROUP BY u.channel;",
+  "Что измеряет COUNT(DISTINCT user_id) среди событий purchase?",["Число отдельных платежей","Число уникальных платящих пользователей","Общую выручку"],1,"Платящий пользователь может совершить несколько отдельных покупок.",[
+    T("product-13","Выручка каналов","Для каждого канала привлечения рассчитай общую сумму покупок revenue. Покажи все каналы, в том числе без платежей (с нулевой суммой).","SELECT u.channel,COALESCE(SUM(e.amount) FILTER(WHERE e.event_type='purchase'),0) AS revenue FROM app_users u LEFT JOIN user_events e ON e.user_id=u.user_id GROUP BY u.channel;"),
+    T("product-14","Платежи по месяцам","По каждому месяцу, когда были покупки, покажи первый день месяца month и сумму выручки revenue от платежей этого месяца.","SELECT DATE_TRUNC('month',event_at)::date AS month,SUM(amount) AS revenue FROM user_events WHERE event_type='purchase' GROUP BY DATE_TRUNC('month',event_at)::date;"),
+    T("product-15","Повторно платящие","Найди идентификаторы пользователей, совершивших минимум две покупки. Покажи user_id и число покупок purchases_count.","SELECT user_id,COUNT(*) AS purchases_count FROM user_events WHERE event_type='purchase' GROUP BY user_id HAVING COUNT(*)>=2;")
+  ],"Объём платежей, уникальные покупатели и выручка различаются по зерну. События просмотра не должны увеличивать сумму покупки при JOIN, иначе результат математически неверен."),
+  L("product-history","История действий и качество метрик","Уточняем порядок событий, находим последнюю активность и ранжируем платежи.",[
+    "Для истории действий важно время event_at, но события могут происходить в одну секунду, поэтому дополняй ORDER BY уникальным event_id. LAG позволяет видеть предыдущую сумму покупки в истории того же пользователя.",
+    "При поиске последней активности всех зарегистрированных используем LEFT JOIN и MAX, чтобы пользователь без событий не исчез. Такое отсутствие должно остаться NULL, а не автоматически превращаться в дату регистрации."
+  ],"SELECT user_id,event_id,\n LAG(amount) OVER(PARTITION BY user_id ORDER BY event_at,event_id) AS previous_amount\nFROM user_events WHERE event_type='purchase';",
+  "Почему в ORDER BY истории событий нужен дополнительный event_id?",["Чтобы сделать порядок воспроизводимым при равном времени","Чтобы удалить дубли","Чтобы ускорить любой запрос"],0,"Временная метка не всегда уникальна. Дополнительный ключ задаёт однозначное следование событий.",[
+    T("product-16","Последняя активность","Для каждого зарегистрированного пользователя покажи user_id и время его последнего события last_event. У пользователя без событий оставь NULL.","SELECT u.user_id,MAX(e.event_at) AS last_event FROM app_users u LEFT JOIN user_events e ON e.user_id=u.user_id GROUP BY u.user_id;"),
+    T("product-17","Рейтинг отдельных платежей","Для каждого платежа покажи его event_id, user_id, сумму и позицию position по убыванию суммы; при равной сумме первым должен быть меньший event_id.","SELECT event_id,user_id,amount,ROW_NUMBER() OVER(ORDER BY amount DESC,event_id) AS position FROM user_events WHERE event_type='purchase';"),
+    T("product-18","Предыдущий платеж","Для каждого платежа покажи user_id, event_id и сумму предыдущей покупки этого пользователя previous_amount. Порядок — время, затем event_id; для первой покупки NULL.","SELECT user_id,event_id,LAG(amount) OVER(PARTITION BY user_id ORDER BY event_at,event_id) AS previous_amount FROM user_events WHERE event_type='purchase';")
+  ],"Временной порядок важен для аналитики последовательности, но многие метрики всё равно требуют явного бизнес-окна. Не считай, что два события одного пользователя автоматически принадлежат одной сессии.")
  ])
+
 ];
 
 export const lessons=modules.flatMap(module=>module.lessons.map((lesson,index)=>({...lesson,moduleId:module.id,moduleTitle:module.title,moduleIndex:modules.indexOf(module),lessonIndex:index})));
@@ -252,7 +309,6 @@ export const taskById=Object.fromEntries(tasks.map(task=>[task.id,task]));
 export const moduleById=Object.fromEntries(modules.map(module=>[module.id,module]));
 export const upcomingModules=[
  "Продвинутые JOIN и анализ качества данных",
- "Когортный анализ, retention и воронки",
  "Реальные аналитические исследования",
  "Производительность, EXPLAIN и индексы",
  "Итоговые проекты и экзамен"
@@ -262,3 +318,9 @@ export const project={
  lead:"Руководитель доставки хочет понять, сколько заказов выполнено, откуда поступает выручка и кто ещё не совершил ни одной покупки. Подготовь воспроизводимые SQL-отчёты.",
  taskIds:["aggr-2","join-4","join-5","win-5"]
 };
+
+export const projects=[project,{
+ id:'growth-signals',title:'Growth Signals',subtitle:'Продуктовая аналитика и когортное удержание',
+ lead:'Менеджер продукта просит объяснить активность аудитории, конверсию каналов, удержание новых когорт и повторные покупки. Используй отдельную событийную базу.',
+ taskIds:['product-4','product-7','product-12','product-15']
+}];

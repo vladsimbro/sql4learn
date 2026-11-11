@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
-import {modules,lessons,tasks,upcomingModules,taskById,lessonById} from '../src/content.js';
+import {modules,lessons,tasks,projects,upcomingModules,taskById,lessonById} from '../src/content.js';
 import {assessments,assessmentTasks} from '../src/assessments.js';
 import {clinicTasks} from '../src/clinic.js';
 import {xrayScenarios} from '../src/xray.js';
@@ -11,17 +11,19 @@ import {initialProgress,normalizeProgress,exportProgress,importProgress,mastery}
 
 const all=[...tasks,...assessmentTasks,...clinicTasks];
 test('Only real finished lessons are offered, with unique skill and task IDs',()=>{
- assert.equal(modules.length,7);
- assert.equal(lessons.length,29);
- assert.equal(tasks.length,73);
- assert.equal(assessments.length,4);
- assert.equal(assessmentTasks.length,8);
- assert.equal(clinicTasks.length,8);
- assert.equal(xrayScenarios.length,5);
- assert.equal(xrayScenarios.flatMap(x=>x.steps).length,19);
+ assert.equal(modules.length,8);
+ assert.equal(lessons.length,35);
+ assert.equal(tasks.length,91);
+ assert.equal(assessments.length,5);
+ assert.equal(assessmentTasks.length,11);
+ assert.equal(clinicTasks.length,11);
+ assert.equal(xrayScenarios.length,6);
+ assert.equal(xrayScenarios.flatMap(x=>x.steps).length,23);
  assert.equal(new Set(lessons.map(x=>x.id)).size,lessons.length);
  assert.equal(new Set(all.map(x=>x.id)).size,all.length);
  assert.ok(upcomingModules.length>=4);
+ assert.equal(projects.length,2);
+ for(const project of projects){assert.equal(project.taskIds.length,4);for(const id of project.taskIds)assert.ok(taskById[id],project.id+' references an unknown task');}
  assert.ok(lessons[0].tasks.length>=2);
  for(const lesson of lessons){
   assert.ok(lesson.lead.length>35 && lesson.insight.length>80,lesson.id);
@@ -31,9 +33,11 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
   assert.ok(Number.isInteger(lesson.quiz.correct)&&lesson.quiz.correct>=0&&lesson.quiz.correct<3,lesson.id);
   for(const task of lesson.tasks)assert.ok(task.prompt.length>=45&&task.sql.length>15,task.id);
  }
- assert.equal(Object.keys(SCHEMA).length,5);
+ assert.equal(Object.keys(SCHEMA).length,7);
  assert.ok(taskById['start-1']&&lessonById['first-query']);
  assert.ok(taskById['date-15']&&lessonById['date-calendar']);
+ assert.ok(taskById['product-18']&&lessonById['product-cohorts']);
+ assert.ok(modules.findIndex(m=>m.id==='product')>modules.findIndex(m=>m.id==='windows'),'Product cohort analytics must follow windows and CTEs');
  const moduleIndex=modules.findIndex(module=>module.id==='dates');
  assert.ok(moduleIndex>modules.findIndex(module=>module.id==='joins')&&moduleIndex<modules.findIndex(module=>module.id==='cte'),'Date training must follow joins but precede multistage CTEs');
 });
@@ -76,6 +80,13 @@ test('Every SQL answer executes on original and adversarial PostgreSQL fixtures'
   const rowCounts=await base.query('SELECT (SELECT COUNT(*) FROM orders) AS orders_count, (SELECT COUNT(*) FROM stores) AS stores_count');
   assert.equal(Number(rowCounts.rows[0].orders_count),18);
   assert.equal(Number(rowCounts.rows[0].stores_count),6);
+  const prodCounts=await base.query('SELECT (SELECT COUNT(*) FROM app_users) AS users, (SELECT COUNT(*) FROM user_events) AS events');
+  assert.equal(Number(prodCounts.rows[0].users),13);
+  assert.equal(Number(prodCounts.rows[0].events),39);
+  const noEvents=await base.query('SELECT COUNT(*) AS n FROM user_events WHERE user_id=15');
+  assert.equal(Number(noEvents.rows[0].n),0,'Control user must have no events');
+  const premature=await base.query("SELECT COUNT(*) AS n FROM user_events WHERE user_id=10 AND event_type='purchase' AND event_at < (SELECT MIN(event_at) FROM user_events WHERE user_id=10 AND event_type='view')");
+  assert.equal(Number(premature.rows[0].n),1,'Strict funnel must detect purchase before first view');
   for(const task of all){
     const original=await queryReadOnly(base,task.sql);
     const variant=await queryReadOnly(alt,task.sql);
