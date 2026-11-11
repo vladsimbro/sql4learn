@@ -13,13 +13,18 @@ import {reviewSkills,reviewStatus,reviewTask,advanceReview,reviewUnlocked,REVIEW
 import {splitSQL,ensureSelect,queryReadOnly,compareResults,gradeSQL} from '../src/sql.js';
 import {initialProgress,normalizeProgress,exportProgress,importProgress,mastery} from '../src/progress.js';
 import {lessonGuides,modulePedagogy} from '../src/lesson-guides.js';
+import {lessonWalkthroughs,lessonVisuals} from '../src/lesson-walkthroughs.js';
 
 const all=[...tasks,...assessmentTasks,...clinicTasks,...independentProjectTasks];
 test('Only real finished lessons are offered, with unique skill and task IDs',()=>{
  assert.equal(modules.length,9);
- assert.equal(lessons.length,44);
- assert.equal(tasks.length,119);
+ assert.equal(lessons.length,63);
+ assert.equal(tasks.length,190);
  assert.equal(assessments.length,6);
+ for(const id of ['text-normalize','text-extract','type-cast','numeric-expr','safe-ratios','keys-relations','cross-join','self-join','set-union','set-compare','not-exists-null','window-lead','window-moving','window-first-last','string-agg','correlated-scalar','window-ntile','stat-median','rollup-totals'])assert.ok(lessonById[id],'Missing core SQL subject: '+id);
+ assert.ok(lessons.findIndex(l=>l.id==='keys-relations')<lessons.findIndex(l=>l.id==='inner'),'Teach PK/FK before JOIN');
+ assert.ok(lessons.findIndex(l=>l.id==='type-cast')<lessons.findIndex(l=>l.id==='date-types'),'Teach type conversion before date casts');
+ assert.ok(lessons.findIndex(l=>l.id==='set-union')<lessons.findIndex(l=>l.id==='subquery'),'Teach set operations before correlated subqueries');
  assert.equal(assessmentTasks.length,14);
  assert.deepEqual(assessments.map(a=>a.after),['filter','joins','dates','windows','audit','product'],'Cumulative exams must match the taught curriculum sequence');
  assert.equal(clinicTasks.length,13);
@@ -68,6 +73,21 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
  assert.ok(lessons.findIndex(l=>l.id==='logical-order')>lessons.findIndex(l=>l.id==='fanout'),'SQL logical order should follow required filtering and JOIN topics');
  assert.ok(modules.findIndex(m=>m.id==='product')>modules.findIndex(m=>m.id==='windows'),'Product cohort analytics must follow windows and CTEs');
  assert.equal(Object.keys(lessonGuides).length,lessons.length,'A learning contract is required for every lesson');
+ assert.equal(Object.keys(lessonWalkthroughs).length,lessons.length,'Every lesson needs a concrete explanation in three stages');
+ for(const lesson of lessons){
+  const stages=lessonWalkthroughs[lesson.id];
+  assert.ok(Array.isArray(stages)&&stages.length===3,lesson.id+' missing reasoning stages');
+  assert.ok(stages.every(text=>typeof text==='string'&&text.length>=80),lesson.id+' stages must be explanatory, not decorative labels');
+  assert.equal(new Set(stages).size,3,lesson.id+' stages must describe different reasoning actions');
+ }
+ for(const [id,visual] of Object.entries(lessonVisuals)){
+  assert.ok(lessonById[id],id+' visual without lesson');
+  for(const table of [visual.before,visual.after]){
+   assert.ok(table.label&&table.columns.length>=1&&table.rows.length>=1,id+' empty table');
+   assert.ok(table.rows.every(row=>row.length===table.columns.length),id+' malformed visual table');
+  }
+  assert.ok(visual.insight.length>=75,id+' visual must explain the transformation');
+ }
  assert.equal(Object.keys(modulePedagogy).length,modules.length,'Every module must explain why it follows the last');
  const index=Object.fromEntries(lessons.map((lesson,i)=>[lesson.id,i]));
  for(const lesson of lessons){
@@ -120,8 +140,15 @@ test('Comparison accepts equivalent ordering when not required, but not duplicat
  const reordered={fields,rows:[{id:2,amount:9},{id:1,amount:9}]};
  assert.equal(compareResults(reordered,expected).ok,true);
  assert.equal(compareResults(reordered,expected,true).ok,false);
+ assert.equal(compareResults(reordered,expected,true).details.kind,'ordered');
+ assert.equal(compareResults(reordered,expected,true).details.row,1);
  assert.equal(compareResults({fields,rows:[{id:1,amount:9},{id:1,amount:9}]},expected).ok,false);
  assert.equal(compareResults({fields:[{name:'other'}],rows:[]},expected).type,'columns');
+ assert.deepEqual(compareResults({fields:[{name:'other'}],rows:[]},expected).details.missing,['id','amount']);
+ const mismatch=compareResults({fields,rows:[{id:1,amount:9},{id:1,amount:9}]},expected);
+ assert.equal(mismatch.details.kind,'values');
+ assert.match(mismatch.details.missing,/id=2/);
+ assert.match(mismatch.details.extra,/id=1/);
 });
 test('Progress is scoped to authored IDs and backups cannot import arbitrary state',()=>{
  const source={completed:['start-1','start-1','evil','checkpoint-1a','portfolio-support-1'],read:['first-query','evil'],quiz:{'first-query':0,evil:100},drafts:{'start-1':'SELECT 1','portfolio-support-1':'SELECT 42',evil:'DROP TABLE orders'},projectNotes:{'support-ops':'SLA и распределение нагрузок проверены.','fake-project':'bad'},theme:'dark'};
@@ -143,6 +170,13 @@ test('Progress is scoped to authored IDs and backups cannot import arbitrary sta
  assert.equal(importProgress(exportProgress(source)).theme,'dark');
  assert.throws(()=>importProgress('{"product":"other","format":1,"progress":{}}'));
  assert.equal(mastery(progress,lessonById['first-query']).completed,1);
+ const oldMastered=normalizeProgress({version:1,completed:['start-4','start-5'],quiz:{'explore-data':1}});
+ assert.ok(oldMastered.legacyMastered.includes('explore-data'),'Completing the old two-task lesson must survive new extra practice');
+ assert.equal(mastery(oldMastered,lessonById['explore-data']).grandfathered,true);
+ assert.deepEqual(importProgress(exportProgress(oldMastered)).legacyMastered,oldMastered.legacyMastered,'Legacy mastery must survive backup and restore');
+ const newLearner=normalizeProgress({version:1,curriculumVersion:2,completed:['start-4','start-5'],quiz:{'explore-data':1}});
+ assert.equal(newLearner.legacyMastered.includes('explore-data'),false,'New students must finish newly added practice');
+ assert.equal(initialProgress().curriculumVersion,2);
  assert.equal(initialProgress().completed.length,0);
 });
 test('Every SQL answer executes on original and adversarial PostgreSQL fixtures',async()=>{

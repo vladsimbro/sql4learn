@@ -19,6 +19,11 @@ try{
  await clickHash('#/lesson/first-query');
  assert.match(await page.locator('.lesson-goal').textContent(),/Вычислить значение/,'Every lesson must show an explicit, assessable outcome');
  assert.match(await page.locator('.lesson-prediction').textContent(),/7 \+ 5/,'Each lesson needs a subject-specific prediction');
+ assert.equal(await page.locator('.walkthrough-step').count(),3,'Each lesson must show three concrete reasoning steps');
+ assert.equal(await page.locator('.lesson-hints details').count(),3,'Lesson help must be progressive and collapsed by default');
+ assert.equal(await page.locator('.lesson-hints details[open]').count(),0,'Hints should not spoil independent practice');
+ await page.locator('.lesson-hints summary').first().click();
+ assert.equal(await page.locator('.lesson-hints details[open]').count(),1,'Learner can open a targeted hint');
  await page.locator('#example-prediction').fill('2');
  await page.locator('[data-action="run-example"]').click();
  await page.locator('.prediction-result.review').waitFor({state:'visible'});
@@ -82,6 +87,23 @@ try{
  assert.equal(await page.locator('.curriculum-sequence-step').count(),9,'Nine modules should form a visible, explained learning path');
  assert.match(await page.locator('.module-card').nth(7).textContent(),/Сложные JOIN/,'Teach reliability before product reports');
  assert.match(await page.locator('.module-card').nth(8).textContent(),/Продуктовая аналитика/);
+ await clickHash('#/module/filter');
+ assert.match(await page.locator('.lesson-list').textContent(),/Типы данных/,'Core SQL types must be taught inside the learning route');
+ await clickHash('#/module/joins');
+ assert.match(await page.locator('.lesson-list').textContent(),/SELF JOIN/,'Core JOIN variants must be available inside learning route');
+ await clickHash('#/module/windows');
+ assert.match(await page.locator('.lesson-list').textContent(),/LAST_VALUE/,'Extended window lessons must be part of curriculum');
+ assert.match(await page.locator('.lesson-list').textContent(),/Медиана/,'Median and percentiles must follow ranked windows');
+ await clickHash('#/module/audit');
+ assert.match(await page.locator('.lesson-list').textContent(),/ROLLUP/,'Multilevel aggregation must follow audit fundamentals');
+ await clickHash('#/course');
+ await clickHash('#/lesson/group-by');
+ assert.equal(await page.locator('.walkthrough-table').count(),2,'GROUP BY must have genuine before-after data tables');
+ assert.match(await page.locator('.walkthrough-insight').textContent(),/GROUP BY/,'Explain the visualised change in grain');
+ await page.locator('#sql-editor').fill("SELECT status,COUNT(*) AS orders_count FROM orders WHERE status='cancelled' GROUP BY status");
+ await page.locator('[data-action="check"]').click();
+ await page.locator('#task-feedback .feedback-diff').waitFor({timeout:45000});
+ assert.match(await page.locator('#task-feedback .feedback-diff').textContent(),/строк/,'Course feedback must explain which part differs');
  await clickHash('#/lesson/limit-top');
  await page.locator('.lesson-heading h1').waitFor();
  assert.match(await page.locator('.lesson-heading h1').textContent(),/LIMIT/);
@@ -215,13 +237,21 @@ try{
  await page.locator('#theme-toggle').click();
  assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
  await clickHash('#/practice');
- assert.equal(await page.locator('.exercise-card').count(),119);
+ assert.equal(await page.locator('.exercise-card').count(),190);
  await page.setViewportSize({width:390,height:844});
  await page.locator('#menu-toggle').click();
  assert.ok(await page.locator('#sidebar').evaluate(el=>el.classList.contains('open')),'Mobile navigation should open');
  await page.locator('#sidebar [data-page="course"]').click();
  await page.locator('.module-card').first().waitFor();
  assert.equal(await page.locator('.module-card').count(),9);
+ // Migrated progress should preserve an old mastered lesson even after its practice expands.
+ await page.evaluate(()=>localStorage.setItem('sql4learn-progress-v1',JSON.stringify({version:1,completed:['start-4','start-5'],quiz:{'explore-data':1}})));
+ await page.reload({waitUntil:'domcontentloaded'});
+ await page.locator('#engine-status.ready').waitFor({timeout:120000});
+ await clickHash('#/module/start');
+ assert.ok(await page.locator('a[href="#/lesson/explore-data"]').evaluate(el=>el.classList.contains('done')),'Old mastery must not be invalidated by a new optional exercise');
+ await clickHash('#/lesson/explore-data');
+ assert.match(await page.locator('.side-card').first().textContent(),/Зачёт старой версии сохранён/,'Explain grandfathered mastery alongside new tasks');
  assert.deepEqual(errors,[],'No runtime JavaScript exceptions');
  console.log('Browser verification passed: live PostgreSQL, correct/incorrect answers, exam integrity, persistence, read-only SQL, theme, mobile navigation.');
 }finally{

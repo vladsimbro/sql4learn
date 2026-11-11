@@ -28,6 +28,32 @@ jobs:
           for file in src/*.js tests/*.mjs; do node --check "$file"; done
       - name: Execute every reference query on two PostgreSQL datasets
         run: npm test
+  browser-preview:
+    # Test the real curriculum UI before merging, without publishing a pull request.
+    needs: validate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --no-package-lock
+      - name: Install Chromium
+        run: npx playwright install chromium
+      - name: Test local browser, editor, SQL feedback and mobile route
+        env:
+          BASE_URL: http://127.0.0.1:4173/
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/sql4learn-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --silent --fail http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          npm run test:browser
   deploy:
     needs: validate
     if: github.event_name == 'push'

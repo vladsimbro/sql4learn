@@ -108,3 +108,40 @@
 .lesson-mistake p,.lesson-self-check p{font-size:11px;color:var(--ink);line-height:1.8;margin:0}
 @media(max-width:1100px){.curriculum-sequence-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:610px){.curriculum-sequence{padding:15px}.curriculum-sequence-grid{grid-template-columns:1fr}.curriculum-sequence-step{min-height:62px}.lesson-goal{padding:14px}.lesson-prediction{padding:13px}}
+
+
+/* Curriculum only: guided reasoning, concrete before/after tables and opt-in progressive help. */
+.lesson-walkthrough{margin:20px 0;padding:19px;border:1px solid var(--border);background:var(--paper2);box-shadow:none}
+.lesson-walkthrough>h2{margin-bottom:8px}
+.lesson-walkthrough>p{margin:0 0 16px}
+.walkthrough-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.walkthrough-step{border:1px solid var(--border);background:var(--paper);border-radius:12px;padding:13px;min-width:0}
+.walkthrough-step-header{display:flex;align-items:center;gap:8px;line-height:1.45}
+.walkthrough-step-header span{display:grid;place-items:center;border-radius:50%;background:var(--blue-soft);color:var(--blue);font-size:11px;font-weight:900;width:25px;height:25px;flex-shrink:0}
+.walkthrough-step-header strong{font-size:11px}
+.walkthrough-step p{font-size:11px;color:var(--muted);line-height:1.75;margin:10px 0 0}
+.walkthrough-visual{margin-top:16px;padding-top:15px;border-top:1px solid var(--border)}
+.walkthrough-visual h3{font-size:14px;line-height:1.4;margin:0 0 13px}
+.walkthrough-tables{display:grid;grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr);gap:10px;align-items:center}
+.walkthrough-table{min-width:0}
+.walkthrough-table>strong{display:block;font-size:10px;line-height:1.5;margin-bottom:8px;color:var(--muted)}
+.walkthrough-table .table-scroll{width:100%;overflow-x:auto}
+.walkthrough-table table{width:100%;border-collapse:collapse;font-size:10px;background:var(--paper);border:1px solid var(--border)}
+.walkthrough-table th,.walkthrough-table td{padding:8px 9px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+.walkthrough-table th{background:var(--blue-soft);color:var(--ink)}
+.walkthrough-table tr:last-child td{border-bottom:0}
+.walkthrough-arrow{text-align:center;color:var(--blue);font-size:18px;font-weight:800}
+.lesson-section .walkthrough-insight{background:var(--teal-soft);color:var(--ink);border-radius:9px;padding:12px 14px;font-size:11px;line-height:1.7;margin:14px 0 0}
+.lesson-hints{border:1px solid var(--border);border-radius:12px;margin:13px 0;padding:12px 15px}
+.lesson-hints>strong{display:block;font-size:11px;margin:0 0 9px}
+.lesson-hints details{padding:9px 0;border-top:1px solid var(--border)}
+.lesson-hints summary{cursor:pointer;font-size:11px;font-weight:750;color:var(--blue);line-height:1.6}
+.lesson-hints details p{color:var(--muted);font-size:11px;line-height:1.8;margin:9px 0 0}
+@media(max-width:920px){.walkthrough-steps{grid-template-columns:1fr}.walkthrough-tables{grid-template-columns:1fr}.walkthrough-arrow{transform:rotate(90deg);padding:4px}}
+
+/* The error explanation appears only inside a course lesson. */
+.feedback-diff{margin-top:12px;padding:11px 13px;border:1px solid var(--border);border-radius:10px;background:var(--paper);color:var(--ink)}
+.feedback-diff>strong{display:block;font-size:11px;margin-bottom:5px;color:var(--ink)}
+.feedback-diff>p{font-size:11px;line-height:1.8;margin:6px 0;overflow-wrap:anywhere;color:var(--ink)}
+
+.lesson-walkthrough .walkthrough-disclaimer{font-size:10px;color:var(--muted);margin:0 0 13px;line-height:1.7}

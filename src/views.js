@@ -9,6 +9,7 @@ import {independentProjects,independentProjectById} from './portfolio.js';
 import {reviewSkills,reviewSkillById,reviewStatus,reviewTask} from './review-bank.js';
 import {mastery} from './progress.js';
 import {getLessonGuide,modulePedagogy} from './lesson-guides.js';
+import {lessonWalkthroughs,lessonVisuals} from './lesson-walkthroughs.js';
 
 export const esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;");
 const done=(state,id)=>state.progress.completed.includes(id);
@@ -17,7 +18,7 @@ const skill=(state,module)=> {
  const all=module.lessons.flatMap(l=>l.tasks),passed=all.filter(t=>done(state,t.id)).length;
  return {passed,total:all.length,percent:percentage(passed,all.length)};
 };
-const lessonDone=(state,l)=>l.tasks.length>0&&l.tasks.every(t=>done(state,t.id))&&state.progress.quiz[l.id]===l.quiz.correct;
+const lessonDone=(state,l)=>l.tasks.length>0&&(l.tasks.every(t=>done(state,t.id))||state.progress.legacyMastered?.includes(l.id))&&state.progress.quiz[l.id]===l.quiz.correct;
 const button=(label,href,primary=false)=>`<a class="btn ${primary?'primary':''}" href="${href}">${esc(label)}</a>`;
 const pill=(label,style='')=>`<span class="pill ${style}">${esc(label)}</span>`;
 const header=(eyebrow,title,description,action='')=>`<div class="page-header"><div><p class="section-eyebrow">${esc(eyebrow)}</p><h1>${esc(title)}</h1><p>${esc(description)}</p></div>${action}</div>`;
@@ -106,6 +107,16 @@ function misconceptionGuide(l){
  return guide?`<div class="lesson-mistake"><span class="section-eyebrow">ТИПИЧНАЯ ЛОГИЧЕСКАЯ ОШИБКА</span><p>${esc(guide.pitfall)}</p></div>
  <div class="lesson-self-check"><span class="section-eyebrow">ПРОВЕРЬ СЕБЯ</span><p>${esc(guide.check)}</p></div>`:'';
 }
+function renderWalkthrough(l){
+ const steps=lessonWalkthroughs[l.id]||[],visual=lessonVisuals[l.id];
+ if(!steps.length)return '';
+ const stageNames=['Сначала — исходные данные','Затем — действие SQL','Наконец — проверь результат'];
+ const grid=(table)=>`<div class="walkthrough-table"><strong>${esc(table.label)}</strong><div class="table-scroll"><table><thead><tr>${table.columns.map(c=>`<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${table.rows.map(row=>`<tr>${row.map(cell=>`<td>${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+ return `<div class="lesson-walkthrough" id="lesson-walkthrough"><p class="section-eyebrow">ЛОГИКА БЕЗ ЗУБРЁЖКИ</p><h2>Разберём на маленьком примере</h2>
+ <p>Пройди эти шаги мысленно, а затем сравни с результатом настоящего запроса ниже. Здесь важнее понять, почему меняются строки, чем запомнить команду.</p>
+ <div class="walkthrough-steps">${steps.map((step,i)=>`<article class="walkthrough-step"><div class="walkthrough-step-header"><span>${i+1}</span><strong>${esc(stageNames[i])}</strong></div><p>${esc(step)}</p></article>`).join('')}</div>
+ ${visual?`<div class="walkthrough-visual"><h3>${esc(visual.title)}</h3><p class="walkthrough-disclaimer">Это условный маленький пример для объяснения, а не строки учебной базы. Ниже ты запустишь настоящий SQL.</p><div class="walkthrough-tables">${grid(visual.before)}<span class="walkthrough-arrow" aria-hidden="true">→</span>${grid(visual.after)}</div><p class="walkthrough-insight">${esc(visual.insight)}</p></div>`:''}</div>`;
+}
 function quiz(state,l){
  const selection=state.progress.quiz[l.id],hasAnswer=Number.isInteger(selection);
  return `<section class="card lesson-section"><p class="section-eyebrow">ПРОВЕРКА ПОНИМАНИЯ</p><h2>${esc(l.quiz.question)}</h2>
@@ -113,8 +124,23 @@ function quiz(state,l){
  ${hasAnswer?`<div class="feedback ${selection===l.quiz.correct?'success':'error'}"><strong>${selection===l.quiz.correct?'Верно.':'Есть ошибка — попробуй ещё раз.'}</strong>${esc(l.quiz.why)}</div>`:''}</section>`;
 }
 const flow={start:['SELECT','Вычисление выражений','Таблица результата'],filter:['FROM','WHERE','SELECT','ORDER BY'],aggregate:['FROM','WHERE','GROUP BY','Агрегаты','HAVING','SELECT'],dates:['Календарные границы','FROM / generate_series','JOIN / WHERE','GROUP BY период','SELECT'],joins:['FROM','JOIN ... ON','WHERE','SELECT'],cte:['WITH: этапы','Внешний SELECT','Результат'],windows:['Исходные строки','PARTITION BY','ORDER BY','OVER: значение'],product:['События','Зерно и уникальные люди','JOIN / CTE','Когорта / канал','Агрегаты и метрика'],audit:['Выбрать зерно','Проверить ключи','Свернуть детали','JOIN / CTE','Сверить метрику']};
-function flowChart(m){const items=flow[m]||flow.start;return `<div class="flow-steps">${items.map((item,i)=>`${i?'<i>→</i>':''}<span>${esc(item)}</span>`).join('')}</div>`;}
-function taskEditor(state,task,exam=false){
+// Specific flows keep UNION, aggregates and windows from inheriting misleading JOIN diagrams.
+const lessonFlows={
+ 'keys-relations':['PK справочника','FK заказа','Число совпадений','Зерно ответа'],
+ 'cross-join':['Таблица A','Таблица B','Все пары A × B','Дополнительный WHERE'],
+ 'self-join':['Источник a','Тот же источник b','Условие связи','Исключение зеркальных пар'],
+ 'logical-order':['FROM / JOIN','WHERE','GROUP BY','HAVING','SELECT','ORDER BY','LIMIT'],
+ 'set-union':['SELECT A','SELECT B','UNION / UNION ALL','Повторы','Результат'],
+ 'set-compare':['Набор A','Набор B','INTERSECT / EXCEPT','Общие / отсутствующие'],
+ 'safe-ratios':['Подходящие строки','Числитель','NULLIF(знаменатель,0)','Процент'],
+ 'string-agg':['Строки группы','ORDER BY внутри агрегата','STRING_AGG','Одна подпись'],
+ 'correlated-scalar':['Внешняя строка','Связанный SELECT','Одно значение','Следующая строка'],
+ 'window-ntile':['ORDER BY','PARTITION BY','NTILE / PERCENT_RANK','Новый столбец'],
+ 'stat-median':['Подходящие суммы','ORDER BY внутри PERCENTILE','Медиана / перцентиль','Один итог'],
+ 'rollup-totals':['GROUP BY фактов','ROLLUP / GROUPING SETS','Подытоги','Общий итог']
+};
+function flowChart(m,lessonId){const items=lessonFlows[lessonId]||flow[m]||flow.start;return `<div class="flow-steps">${items.map((item,i)=>`${i?'<i>→</i>':''}<span>${esc(item)}</span>`).join('')}</div>`;}
+function taskEditor(state,task,exam=false,withHelp=false){
  const note=state.progress.drafts[task.id]??task.brokenSQL??'',result=state.result?.taskId===task.id?state.result:null;
  return `<section class="card lesson-task" id="task-editor">
   <div class="task-head"><div><p class="task-overline">САМОСТОЯТЕЛЬНЫЙ SQL · ${esc(task.id)}</p><h2>${esc(task.title)}</h2></div>${done(state,task.id)?pill('✓ Решено','teal'):pill('Задача')}</div>
@@ -122,15 +148,31 @@ function taskEditor(state,task,exam=false){
   <div class="editor-shell"><div class="editor-top"><span>query.sql · PostgreSQL</span><strong>${state.engineReady?'● Готов к запросам':'○ Инициализация'}</strong></div>
   <textarea class="sql-editor" id="sql-editor" spellcheck="false" autocomplete="off" autocapitalize="off" data-draft="${esc(task.id)}" aria-label="SQL-редактор">${esc(note)}</textarea>
   <div class="editor-shortcuts"><span>Ctrl / Cmd + Enter — проверить</span><span>SQL · read only</span></div></div>
-  <div class="task-actions"><button class="btn primary" data-action="check" data-task-id="${esc(task.id)}" ${!state.engineReady?'disabled':''}>Проверить SQL</button><button class="btn" data-action="run" data-task-id="${esc(task.id)}" ${!state.engineReady?'disabled':''}>Выполнить</button>${exam?'':`<button class="btn" data-action="hint" data-task-id="${esc(task.id)}">Подсказка</button><button class="btn" data-action="solution" data-task-id="${esc(task.id)}">Разобрать решение</button>`}</div>
+  <div class="task-actions"><button class="btn primary" data-action="check" data-task-id="${esc(task.id)}" ${!state.engineReady?'disabled':''}>Проверить SQL</button><button class="btn" data-action="run" data-task-id="${esc(task.id)}" ${!state.engineReady?'disabled':''}>Выполнить</button>${exam?'':`${withHelp?'':`<button class="btn" data-action="hint" data-task-id="${esc(task.id)}">Подсказка</button>`}<button class="btn" data-action="solution" data-task-id="${esc(task.id)}">Разобрать решение</button>`}</div>
+  ${withHelp?`<div class="lesson-hints"><strong>Если застрял — открой помощь по одному шагу</strong><details><summary>Подсказка 1 · с чего начать</summary><p>${esc(getLessonGuide(task.lessonId||state.route?.id)?.goal||'Определи, что означает одна строка будущего результата.')}</p></details><details><summary>Подсказка 2 · какую ошибку проверить</summary><p>${esc(getLessonGuide(task.lessonId||state.route?.id)?.pitfall||'Проверь смысл строк и условия выборки.')}</p></details><details><summary>Подсказка 3 · проверь себя перед отправкой</summary><p>${esc(getLessonGuide(task.lessonId||state.route?.id)?.check||'Проверь ожидаемые строки, имена и порядок результата.')}</p></details></div>`:''}
   <div id="task-feedback">${result?renderFeedback(result):''}</div><div id="task-result">${result?.query?renderQueryTable(result.query):''}</div>
  </section>`;
+}
+function renderDifference(details){
+ if(!details)return '';
+ let lines=[];
+ if(details.kind==='columns'){
+  if(details.missing.length)lines.push('Не хватает столбцов: '+details.missing.join(', '));
+  if(details.extra.length)lines.push('Лишние столбцы: '+details.extra.join(', '));
+ }
+ if(details.kind==='rows')lines.push('Твой запрос: '+details.actual+' строк. Ожидаемый результат: '+details.expected+' строк. Проверь, что каждая итоговая строка означает нужную сущность.');
+ if(details.kind==='ordered')lines.push('Первое расхождение — строка №'+details.row+'. Ожидалось: '+details.expected+'. Получилось: '+details.actual+'.');
+ if(details.kind==='values'){
+  if(details.missing)lines.push('Пример недостающей строки: '+details.missing);
+  if(details.extra)lines.push('Пример лишней строки: '+details.extra);
+ }
+ return lines.length?'<div class="feedback-diff"><strong>Где именно расходится результат</strong>'+lines.map(s=>'<p>'+esc(s)+'</p>').join('')+'</div>':'';
 }
 export function renderFeedback(result){
  if(result.loading)return '<div class="feedback info">Выполняем запрос и проверяем результат на двух наборах данных…</div>';
  if(result.error)return `<div class="feedback error"><strong>PostgreSQL вернул ошибку</strong>${esc(result.error)}</div>`;
  if(result.passed)return '<div class="feedback success"><strong>Задача зачтена</strong>Запрос дал правильный результат на основном и дополнительном наборе данных. Эквивалентные варианты решения принимаются.</div>';
- if(result.message)return `<div class="feedback ${result.gradeFailed?'error':'info'}"><strong>${result.gradeFailed?'Решение пока не зачтено':'Запрос выполнен'}</strong>${esc(result.message)}</div>`;
+ if(result.message)return `<div class="feedback ${result.gradeFailed?'error':'info'}"><strong>${result.gradeFailed?'Решение пока не зачтено':'Запрос выполнен'}</strong>${esc(result.message)}${result.gradeFailed?renderDifference(result.details):''}</div>`;
  return '';
 }
 const formatted=value=>value===null?'<span class="null-token">NULL</span>':esc(value instanceof Date?value.toISOString():typeof value==='object'?JSON.stringify(value):String(value));
@@ -145,7 +187,7 @@ function masteryPanel(state,l){const m=mastery(state.progress,l);return `<sectio
  <div class="skill-list"><div class="skill-row"><strong>Материал</strong><div class="progress-track"><span style="width:${m.read?100:0}%"></span></div><small>${m.read?'✓':'—'}</small></div>
  <div class="skill-row"><strong>Понимание</strong><div class="progress-track"><span style="width:${m.quiz?100:0}%"></span></div><small>${m.quiz?'✓':'—'}</small></div>
  <div class="skill-row"><strong>SQL</strong><div class="progress-track"><span style="width:${percentage(m.completed,m.total)}%"></span></div><small>${m.completed}/${m.total}</small></div></div>
- <p class="small muted">Отметка чтения сама по себе не подтверждает владение SQL.</p>
+ ${m.grandfathered?'<p class="small muted">Зачёт старой версии сохранён. Появились новые упражнения для дополнительного закрепления.</p>':'<p class="small muted">Отметка чтения сама по себе не подтверждает владение SQL.</p>'}
  <button class="btn small" data-action="read" data-lesson="${l.id}">${m.read?'✓ Материал прочитан':'Отметить прочитанным'}</button></section>`;}
 function schemaPanel(state,scope=''){
  const available=scope==='support.'?SUPPORT_SCHEMA:scope==='inventory.'?INVENTORY_SCHEMA:SCHEMA;
@@ -170,15 +212,16 @@ export function renderLesson(state,id){
  <section class="card lesson-section" id="lesson-theory">${objective(l,state)}<h2>Разберём по шагам</h2>
  ${l.theory.map(p=>`<p>${esc(p)}</p>`).join('')}
  <div class="subtle-line"></div><p class="section-eyebrow">ПРИМЕР ЗАПРОСА</p>
+ ${renderWalkthrough(l)}
  ${predictionGuide(l,state)}
  <pre class="sql-code">${esc(l.example)}</pre>
  <div class="task-actions"><button class="btn" data-action="run-example" data-example-id="${esc(l.id)}" ${!state.engineReady?'disabled':''}>Выполнить и проверить предположение</button></div>
  <div id="lesson-example-result" aria-live="polite">${state.exampleResult?.lessonId===l.id?(state.exampleResult.error?`<div class="feedback error"><strong>Ошибка выполнения примера</strong>${esc(state.exampleResult.error)}</div>`:renderQueryTable(state.exampleResult.query)):''}</div>
- <p class="small muted">Логический путь от исходных данных к результату</p>${flowChart(m.id)}
+ <p class="small muted">Логический путь от исходных данных к результату</p>${flowChart(m.id,l.id)}
  <p><strong>Почему это важно.</strong> ${esc(l.insight)}</p>${misconceptionGuide(l)}</section>
  <div id="lesson-quiz">${quiz(state,l)}</div>
  <div class="lesson-tools">${l.tasks.map((task,i)=>`<button class="tab ${task.id===t.id?'active':''}" data-task-tab="${task.id}">${done(state,task.id)?'✓ ':''}Задача ${i+1}</button>`).join('')}</div>
- ${taskEditor(state,t)}
+ ${taskEditor(state,t,false,true)}
  <div class="lesson-nav">${previous?button('← Предыдущий урок',`#/lesson/${previous.id}`):'<span></span>'}${next?button('Следующий урок →',`#/lesson/${next.id}`,true):button('Все задания','#/practice',true)}</div>
  </div><aside class="workspace-right">${masteryPanel(state,l)}${schemaPanel(state)}<section class="card side-card"><h3>Как решать самостоятельно</h3><p class="small muted" style="line-height:1.9">Сначала прочитай условие, затем напиши SQL без шаблона. Если запрос ошибочный, исправь его и проверь ещё раз. Подсказка доступна, но не заменяет решение.</p></section></aside>
  </div>`;
