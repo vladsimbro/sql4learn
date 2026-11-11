@@ -118,7 +118,7 @@ function schemaPanel(state,scope=''){
  return `<section class="card side-card"><h3>${scope?'Новая предметная область · support':'Учебная база / схема'}</h3>
  <div class="schema-menu">${names.map(key=>`<button data-schema="${esc(key)}" class="${key===name?'active':''}">${esc(key)}</button>`).join('')}</div>
  <table class="schema-table"><tbody>${selected.map(([column,type])=>`<tr><td>${esc(column)}</td><td>${esc(type)}</td></tr>`).join('')}</tbody></table>
- ${scope?`<button class="btn small" data-action="preview-schema" data-table-name="${esc(name)}" ${!state.engineReady?'disabled':''} style="margin-top:12px">Посмотреть первые 8 строк</button>${preview?renderQueryTable(preview):''}<p class="small muted">Таблицы находятся в отдельной схеме PostgreSQL `support`. Исследуй состав данных перед решением.</p>`:`<p class="small muted" style="line-height:1.6;margin:13px 0 0">Видны настоящие таблицы PostgreSQL, доступные во всех упражнениях.</p>`}
+ ${scope?`<button class="btn small" data-action="preview-schema" data-table-name="${esc(name)}" ${!state.engineReady?'disabled':''} style="margin-top:12px">Посмотреть первые 8 строк</button>${preview?renderQueryTable(preview):''}<p class="small muted">Таблицы находятся в отдельной схеме PostgreSQL <code>support</code>. Исследуй состав данных перед решением.</p>`:`<p class="small muted" style="line-height:1.6;margin:13px 0 0">Видны настоящие таблицы PostgreSQL, доступные во всех упражнениях.</p>`}
  </section>`;}
 function activeTask(state,l){return l.tasks.find(t=>t.id===state.activeTaskId)||l.tasks[0];}
 export function renderLesson(state,id){
@@ -183,14 +183,14 @@ export function renderReview(state){
 }
 export function renderProjects(state){
  return header('ПРОЕКТЫ / РЕАЛЬНЫЕ КЕЙСЫ','Аналитическая мастерская','Настоящий самостоятельный кейс на незнакомых данных — отдельно от двух тренировочных историй, собранных из заданий курса.')+
- \`<div class="independent-project-highlight card">
+ `<div class="independent-project-highlight card">
    <div class="independent-project-copy"><p class="section-eyebrow">НОВЫЙ САМОСТОЯТЕЛЬНЫЙ ПРОЕКТ · ОТДЕЛЬНАЯ БАЗА</p>
    <h2>Support Ops · Аудит службы поддержки</h2>
    <p>Новая предметная область, которой не было в уроках: компании, операторы, заявки и история событий. Шесть независимых бизнес-отчётов и аналитическая записка. Никаких готовых алгоритмов.</p>
-   <div class="project-feature-meta">\${pill(independentProjects[0].tasks.filter(t=>done(state,t.id)).length+'/6 SQL-отчётов','teal')}\${pill('PostgreSQL · схема support','neutral')}\${pill('2 набора данных','neutral')}</div>
-   \${button('Открыть самостоятельный проект',\`#/project/\${independentProjects[0].id}\`,true)}</div>
+   <div class="project-feature-meta">${pill(independentProjects[0].tasks.filter(t=>done(state,t.id)).length+'/6 SQL-отчётов','teal')}${pill('PostgreSQL · схема support','neutral')}${pill('2 набора данных','neutral')}</div>
+   ${button('Открыть самостоятельный проект',`#/project/${independentProjects[0].id}`,true)}</div>
    <div class="independent-project-symbol" aria-hidden="true"><span>ANALYTICS</span><strong>SUPPORT<br>OPS_</strong><span>SQL PORTFOLIO</span></div>
- </div><p class="section-eyebrow" style="margin:25px 0 15px">УЧЕБНЫЕ КЕЙСЫ ИЗ ПРОЙДЕННЫХ МОДУЛЕЙ</p>\`+
+ </div><p class="section-eyebrow" style="margin:25px 0 15px">УЧЕБНЫЕ КЕЙСЫ ИЗ ПРОЙДЕННЫХ МОДУЛЕЙ</p>`+
   `<div class="colgap">${projects.map((p,i)=>`
   <section class="card project-hero"><div><p class="section-eyebrow">АНАЛИТИЧЕСКИЙ КЕЙС ${String(i+1).padStart(2,'0')}</p><h2>${esc(p.title)}</h2>
   <p>${esc(p.lead)}</p>
@@ -202,7 +202,7 @@ export function renderProjects(state){
   <section class="card panel"><h2 class="panel-title">${esc(p.subtitle)} — этапы</h2><div class="lesson-list">
    ${p.taskIds.map((id,n)=>{const t=taskById[id];return `<a class="${done(state,id)?'done':''}" href="#/task/${id}"><span class="lesson-number">${String(n+1).padStart(2,'0')}</span><span>${esc(t?.title||id)}</span><small>${done(state,id)?'✓ Выполнено':'Открыть'}</small></a>`}).join('')}
   </div></section>`).join('')}</div>
- <section class="card panel" style="margin-top:17px"><p class="small muted" style="line-height:1.8">Оба кейса сейчас объединяют реальные проверяемые задачи уже изученных модулей. Самостоятельные большие проекты с отдельной защитой расчётов и незнакомыми данными — отдельный следующий этап, не заявляем их готовыми заранее.</p></section>`;
+ <section class="card panel" style="margin-top:17px"><p class="small muted" style="line-height:1.8">Эти два кейса объединяют задачи уже изученных модулей. Полноценный самостоятельный проект Support Ops находится выше. Проверка аналитических выводов экспертом и портфолио-подтверждение пока не реализованы.</p></section>`;
 }
 
 export function renderIndependentProject(state,id){
