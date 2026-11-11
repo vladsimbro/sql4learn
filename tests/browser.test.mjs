@@ -54,6 +54,10 @@ try{
  assert.match(await page.locator('.schema-menu').textContent(),/app_users/);
  await clickHash('#/exam/checkpoint-product');
  assert.equal(await page.locator('[data-exam-tab]').count(),3);
+ await clickHash('#/projects');
+ assert.equal(await page.locator('.project-hero').count(),2,'Two separate domain case studies must be visible');
+ await clickHash('#/clinic');
+ assert.equal(await page.locator('.exercise-card').count(),11,'Clinic should have eleven distinct debugging cases');
  await clickHash('#/playground');
  await page.locator('#sql-editor').fill('DELETE FROM orders;');
  await page.locator('[data-action="run"]').click();
