@@ -133,7 +133,55 @@ export const modules=[
     T("join-8","Сумма товаров","Для каждого заказа покажи номер и расчётную стоимость всех его позиций items_total. Для заказов без позиций должна получиться сумма 0.","SELECT o.order_id,COALESCE(SUM(oi.quantity*oi.unit_price),0) AS items_total FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.order_id GROUP BY o.order_id;")
   ],"SUM(DISTINCT amount) не исправляет fan-out: два разных заказа могут иметь одинаковую сумму. Уникальность бизнес-факта задаётся order_id, а не значением денег.")
  ]),
- M("cte","Многошаговые запросы","CTE, подзапросы, EXISTS и проверяемые конвейеры расчётов.","05",[
+ M("dates","Даты и временные отчёты","Периоды, календарные недели, интервалы, дни без продаж и правильные границы.","05",[
+  L("date-types","DATE и TIMESTAMP: не путай день и момент","Дата отчёта и точное время оформления заказа — разные вещи.",[
+    "DATE хранит календарный день, TIMESTAMP — дату и местное время без сведений о часовом поясе, а TIMESTAMPTZ — точный момент времени с преобразованием для отображения. В учебной orders поле ordered_at имеет тип TIMESTAMP: не следует приписывать ему часовой пояс, которого нет в данных.",
+    "Преобразование ordered_at::date берёт календарную дату. Для фильтра по полным суткам лучше использовать полуоткрытый диапазон: время >= полуночь первого дня и < полуночь следующего. Так не теряются события после 23:59:59 с дробной частью секунды и могут использоваться индексы по исходному полю."
+  ],"SELECT order_id, ordered_at::date AS order_date\nFROM orders\nWHERE ordered_at >= TIMESTAMP '2026-04-05'\n  AND ordered_at < TIMESTAMP '2026-04-06';",
+  "Почему фильтр по суткам лучше завершать условием < начало следующего дня?",["Чтобы исключить начало отчётного дня","Чтобы не потерять дробные секунды в конце суток","Чтобы SQL всегда быстрее работал на любой таблице"],1,"Граница следующего дня задаёт точный полуоткрытый период для любого времени внутри суток.",[
+    T("date-1","Доставка 5 апреля","Для сверки получи номера всех заказов, оформленных в течение 5 апреля 2026 года, включая любые часы и минуты.","SELECT order_id FROM orders WHERE ordered_at >= TIMESTAMP '2026-04-05' AND ordered_at < TIMESTAMP '2026-04-06';"),
+    T("date-2","Даты оформления","Для каждого заказа подготовь его номер и календарную дату оформления в столбце order_date без времени.","SELECT order_id,ordered_at::date AS order_date FROM orders;"),
+    T("date-3","Новая рабочая неделя","Найди номера заказов, оформленных начиная с полуночи 7 апреля 2026 года включительно.","SELECT order_id FROM orders WHERE ordered_at >= TIMESTAMP '2026-04-07';")
+  ],"DATE не означает TIMESTAMP, у которого часы просто скрыты интерфейсом. Для проверяемого отчёта явно указывай, какая дата считается отчётной и какой момент завершает период."),
+  L("date-trunc","DATE_TRUNC: собираем отчёты по дням и неделям","Чтобы сравнить периоды, нужно сначала договориться об их границах.",[
+    "DATE_TRUNC('day', ordered_at) приводит время к началу дня, 'week' — к началу недели, 'month' — к началу месяца. В PostgreSQL неделя DATE_TRUNC начинается в понедельник. Если отчёту нужна именно календарная дата, преобразуй результат к ::date.",
+    "При GROUP BY по началу периода одна строка теперь означает день или неделю, а не заказ. Но обычная группировка показывает только периоды с фактическими заказами: отсутствующие дни надо дополнить отдельным календарём."
+  ],"SELECT DATE_TRUNC('day',ordered_at)::date AS day,\n       COUNT(*) AS orders_count\nFROM orders\nGROUP BY DATE_TRUNC('day',ordered_at)::date\nORDER BY day;",
+  "Какое зерно будет у GROUP BY DATE_TRUNC('day', ordered_at)?",["Одна строка на заказ","Одна строка на календарный день с заказами","Одна строка на клиента"],1,"Все заказы одного дня входят в одну группу, а дни без фактов не появляются автоматически.",[
+    T("date-4","Дневная нагрузка","Подготовь по календарным дням с заказами число оформлений orders_count. Покажи дату day и количество, отсортируй даты по возрастанию.","SELECT ordered_at::date AS day,COUNT(*) AS orders_count FROM orders GROUP BY ordered_at::date ORDER BY day;",true),
+    T("date-5","Дневная выручка","Для каждого дня, в который была хотя бы одна доставленная покупка, рассчитай сумму доставленных заказов revenue. Покажи дату day и значение.","SELECT ordered_at::date AS day,SUM(amount) AS revenue FROM orders WHERE status='delivered' GROUP BY ordered_at::date;"),
+    T("date-6","Отчёт по неделям","Посчитай число всех заказов в каждой календарной неделе. Верни дату понедельника week и orders_count, недели по возрастанию.","SELECT DATE_TRUNC('week',ordered_at)::date AS week,COUNT(*) AS orders_count FROM orders GROUP BY DATE_TRUNC('week',ordered_at)::date ORDER BY week;",true)
+  ],"Для фактов без событий календарная группировка не создаёт нулевые строки. Разница «ноль продаж» и «неизвестно, были ли данные» должна обсуждаться отдельно."),
+  L("extract-dow","EXTRACT: час, день недели и месяц","Из временной метки можно получить признак для анализа нагрузки.",[
+    "EXTRACT берёт часть даты и времени: HOUR, MONTH, ISODOW. ISODOW в PostgreSQL возвращает понедельник = 1, ..., воскресенье = 7. Это удобнее для рабочих недель, чем DOW (в котором воскресенье = 0).",
+    "Группировка по часу или дню недели объединяет события из разных календарных дат. Такой отчёт описывает типичную нагрузку на сегмент времени, а не отдельный календарный период. При необходимости добавь в зерно дату."
+  ],"SELECT EXTRACT(ISODOW FROM ordered_at)::int AS weekday,\n       COUNT(*) AS orders_count\nFROM orders\nGROUP BY EXTRACT(ISODOW FROM ordered_at)::int\nORDER BY weekday;",
+  "Какой номер дня недели вернёт EXTRACT(ISODOW ...) для воскресенья?",["0","1","7"],2,"ISODOW использует ISO-нумерацию: от понедельника 1 до воскресенья 7.",[
+    T("date-7","Нагрузка по дням недели","Рассчитай число оформленных заказов по дням недели ISO. Верни номер дня weekday и количество orders_count, по порядку от понедельника.","SELECT EXTRACT(ISODOW FROM ordered_at)::int AS weekday,COUNT(*) AS orders_count FROM orders GROUP BY EXTRACT(ISODOW FROM ordered_at)::int ORDER BY weekday;",true),
+    T("date-8","Часы оформления","Составь отчёт по часам суток, когда оформляются заказы. Нужны hour и orders_count, час по возрастанию.","SELECT EXTRACT(HOUR FROM ordered_at)::int AS hour,COUNT(*) AS orders_count FROM orders GROUP BY EXTRACT(HOUR FROM ordered_at)::int ORDER BY hour;",true),
+    T("date-9","Месячный объём","Посчитай количество заказов по месяцам. Покажи первый день месяца month и orders_count, по возрастанию месяца.","SELECT DATE_TRUNC('month',ordered_at)::date AS month,COUNT(*) AS orders_count FROM orders GROUP BY DATE_TRUNC('month',ordered_at)::date ORDER BY month;",true)
+  ],"EXTRACT(HOUR ...) без фильтра по дате совмещает несколько дней в один часовой сегмент. Этот показатель подходит для оценки нагрузки по часам, но не для отчёта об объёме за конкретный день."),
+  L("date-interval","INTERVAL: расчёт плановых сроков","Прибавить 90 минут и перейти к следующему месяцу — не одно и то же.",[
+    "INTERVAL задаёт длительности и календарные смещения. ordered_at + INTERVAL '90 minutes' создаёт прогнозный момент. Прибавление INTERVAL '1 month' учитывает разную длину месяцев и не равно 30 дням.",
+    "Когда требуется измерить SLA или время доставки, важно выбрать события начала и конца. В учебной таблице есть время оформления, но пока нет момента фактической доставки: поэтому мы строим плановые сроки, а не изображаем неизвестную длительность доставки."
+  ],"SELECT order_id, ordered_at + INTERVAL '2 days' AS deadline\nFROM orders\nWHERE status='in_transit';",
+  "Можно ли по одной отметке ordered_at посчитать фактическое время доставки?",["Да, вычесть два часа","Нет, для длительности нужен второй момент события","Да, если заказ delivered"],1,"Без даты фактического окончания доставки нельзя честно вычислить её длительность.",[
+    T("date-10","Срок ожидания","Для каждого заказа в пути рассчитай плановый срок через два дня после оформления. Нужны номер и deadline.","SELECT order_id,ordered_at + INTERVAL '2 days' AS deadline FROM orders WHERE status='in_transit';"),
+    T("date-11","Плановый выезд","Для каждого доставленного заказа покажи номер и контрольный момент eta через 90 минут после оформления.","SELECT order_id,ordered_at + INTERVAL '90 minutes' AS eta FROM orders WHERE status='delivered';"),
+    T("date-12","Историческая выгрузка","Подготовь номера заказов, оформленных строго раньше полудня 5 апреля 2026 года.","SELECT order_id FROM orders WHERE ordered_at < TIMESTAMP '2026-04-05 12:00';")
+  ],"В SQL-выражении TIMESTAMP - TIMESTAMP получается интервал, а TIMESTAMP + INTERVAL — временная метка. Не подменяй неизвестные события вымышленными значениями."),
+  L("date-calendar","generate_series: дни без заказов","Отсутствующая строка не равна нулю: календарь нужно построить отдельно.",[
+    "GROUP BY по фактам пропускает даты без событий. generate_series позволяет создать непрерывный список дней. Если присоединить к нему заказы через LEFT JOIN, каждый календарный день сохранится независимо от наличия заказов.",
+    "На календарной сетке нельзя подсчитывать COUNT(*) как количество заказов: у пустого дня остаётся одна строка календаря. Считай COUNT(o.order_id), а отсутствующую сумму заменяй нулём только после осмысленной проверки."
+  ],"SELECT calendar.day::date AS day,\n       COUNT(o.order_id) AS orders_count\nFROM generate_series(DATE '2026-04-01', DATE '2026-04-14', INTERVAL '1 day') AS calendar(day)\nLEFT JOIN orders o\n ON o.ordered_at >= calendar.day\n AND o.ordered_at < calendar.day + INTERVAL '1 day'\nGROUP BY calendar.day\nORDER BY day;",
+  "Почему после LEFT JOIN календаря с заказами нужно использовать COUNT(o.order_id), а не COUNT(*)?",["COUNT(*) не считает NULL","COUNT(*) посчитает даже пустую строку календаря","COUNT(o.order_id) считает уникальные заказы автоматически"],1,"При отсутствии заказа LEFT JOIN сохраняет строку календаря; COUNT(*) вернёт 1, а COUNT правого ключа — 0.",[
+    T("date-13","Полный календарь","Подготовь непрерывный список календарных дат с 1 по 14 апреля 2026 года включительно, даже если заказов не было. Верни один столбец day по возрастанию.","SELECT day::date AS day FROM generate_series(DATE '2026-04-01',DATE '2026-04-14',INTERVAL '1 day') AS calendar(day) ORDER BY day;",true),
+    T("date-14","Дни без заказов","За каждый день с 1 по 14 апреля 2026 года покажи дату day и число оформлений orders_count, включая дни с нулём. Отсортируй дни по возрастанию.","SELECT calendar.day::date AS day,COUNT(o.order_id) AS orders_count FROM generate_series(DATE '2026-04-01',DATE '2026-04-14',INTERVAL '1 day') AS calendar(day) LEFT JOIN orders o ON o.ordered_at >= calendar.day AND o.ordered_at < calendar.day + INTERVAL '1 day' GROUP BY calendar.day ORDER BY day;",true),
+    T("date-15","Дни без выручки","Подготовь ежедневную выручку доставленных заказов за 1–14 апреля 2026 года включительно. Покажи day и revenue, ноль для дней без доставок, по возрастанию дат.","SELECT calendar.day::date AS day,COALESCE(SUM(o.amount) FILTER(WHERE o.status='delivered'),0) AS revenue FROM generate_series(DATE '2026-04-01',DATE '2026-04-14',INTERVAL '1 day') AS calendar(day) LEFT JOIN orders o ON o.ordered_at >= calendar.day AND o.ordered_at < calendar.day + INTERVAL '1 day' GROUP BY calendar.day ORDER BY day;",true)
+  ],"Календарная сетка нужна не ради красоты графика. Если за нулевые дни нет строк, средние значения по дням и сезонные сравнения искажаются: ряд надо явно дополнить.")
+ ]),
+
+ M("cte","Многошаговые запросы","CTE, подзапросы, EXISTS и проверяемые конвейеры расчётов.","06",[
   L("subquery","Подзапросы для сравнения","Иногда условие зависит от значения, которое сначала нужно вычислить.",[
     "Скалярный подзапрос может вернуть одно значение, например средний чек. С ним сравнивают каждую строку исходной таблицы.",
     "Подзапрос внутри WHERE не заменяет осмысленный бизнес-критерий. Сначала уточни, среднее должно быть по всей компании или по каждому магазину."
@@ -164,7 +212,7 @@ export const modules=[
     T("cte-9","Магазины выше среднего оборота","Найди идентификаторы магазинов, общий оборот заказов которых выше среднего оборота на магазин.","WITH t AS (SELECT store_id,SUM(amount) AS total_amount FROM orders GROUP BY store_id) SELECT store_id FROM t WHERE total_amount>(SELECT AVG(total_amount) FROM t);")
   ],"Сначала уточни, чего именно требуется «среднее»: по фактам, по дням, по магазинам или по клиентам. Это четыре разных бизнес-показателя.")
  ]),
- M("windows","Оконные функции","Ранжирование, предыдущие события и накопительные показатели.","06",[
+ M("windows","Оконные функции","Ранжирование, предыдущие события и накопительные показатели.","07",[
   L("row-number","ROW_NUMBER и упорядочивание","Нумеруем строки внутри групп, не теряя детализацию.",[
     "Оконная функция с OVER вычисляет дополнительное значение для строки, но не сворачивает исходные строки, как GROUP BY.",
     "PARTITION BY делит строки на независимые группы, ORDER BY внутри окна устанавливает порядок. Чтобы нумерация была воспроизводимой при равных значениях, добавь уникальный идентификатор."
@@ -203,7 +251,6 @@ export const lessonById=Object.fromEntries(lessons.map(lesson=>[lesson.id,lesson
 export const taskById=Object.fromEntries(tasks.map(task=>[task.id,task]));
 export const moduleById=Object.fromEntries(modules.map(module=>[module.id,module]));
 export const upcomingModules=[
- "Даты, интервалы и временная аналитика",
  "Продвинутые JOIN и анализ качества данных",
  "Когортный анализ, retention и воронки",
  "Реальные аналитические исследования",

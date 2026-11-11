@@ -11,14 +11,14 @@ import {initialProgress,normalizeProgress,exportProgress,importProgress,mastery}
 
 const all=[...tasks,...assessmentTasks,...clinicTasks];
 test('Only real finished lessons are offered, with unique skill and task IDs',()=>{
- assert.equal(modules.length,6);
- assert.equal(lessons.length,24);
- assert.equal(tasks.length,58);
- assert.equal(assessments.length,3);
- assert.equal(assessmentTasks.length,6);
+ assert.equal(modules.length,7);
+ assert.equal(lessons.length,29);
+ assert.equal(tasks.length,73);
+ assert.equal(assessments.length,4);
+ assert.equal(assessmentTasks.length,8);
  assert.equal(clinicTasks.length,8);
- assert.equal(xrayScenarios.length,4);
- assert.equal(xrayScenarios.flatMap(x=>x.steps).length,15);
+ assert.equal(xrayScenarios.length,5);
+ assert.equal(xrayScenarios.flatMap(x=>x.steps).length,19);
  assert.equal(new Set(lessons.map(x=>x.id)).size,lessons.length);
  assert.equal(new Set(all.map(x=>x.id)).size,all.length);
  assert.ok(upcomingModules.length>=4);
@@ -33,6 +33,9 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
  }
  assert.equal(Object.keys(SCHEMA).length,5);
  assert.ok(taskById['start-1']&&lessonById['first-query']);
+ assert.ok(taskById['date-15']&&lessonById['date-calendar']);
+ const moduleIndex=modules.findIndex(module=>module.id==='dates');
+ assert.ok(moduleIndex>modules.findIndex(module=>module.id==='joins')&&moduleIndex<modules.findIndex(module=>module.id==='cte'),'Date training must follow joins but precede multistage CTEs');
 });
 test('SQL statements are parsed without splitting comments and literals',()=>{
  assert.equal(splitSQL("SELECT ';' AS symbol;").length,1);
