@@ -13,6 +13,7 @@ import {reviewSkills,reviewStatus,reviewTask,advanceReview,reviewUnlocked,REVIEW
 import {splitSQL,ensureSelect,queryReadOnly,compareResults,gradeSQL} from '../src/sql.js';
 import {initialProgress,normalizeProgress,exportProgress,importProgress,mastery} from '../src/progress.js';
 import {lessonGuides,modulePedagogy} from '../src/lesson-guides.js';
+import {lessonWalkthroughs,lessonVisuals} from '../src/lesson-walkthroughs.js';
 
 const all=[...tasks,...assessmentTasks,...clinicTasks,...independentProjectTasks];
 test('Only real finished lessons are offered, with unique skill and task IDs',()=>{
@@ -72,6 +73,21 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
  assert.ok(lessons.findIndex(l=>l.id==='logical-order')>lessons.findIndex(l=>l.id==='fanout'),'SQL logical order should follow required filtering and JOIN topics');
  assert.ok(modules.findIndex(m=>m.id==='product')>modules.findIndex(m=>m.id==='windows'),'Product cohort analytics must follow windows and CTEs');
  assert.equal(Object.keys(lessonGuides).length,lessons.length,'A learning contract is required for every lesson');
+ assert.equal(Object.keys(lessonWalkthroughs).length,lessons.length,'Every lesson needs a concrete explanation in three stages');
+ for(const lesson of lessons){
+  const stages=lessonWalkthroughs[lesson.id];
+  assert.ok(Array.isArray(stages)&&stages.length===3,lesson.id+' missing reasoning stages');
+  assert.ok(stages.every(text=>typeof text==='string'&&text.length>=80),lesson.id+' stages must be explanatory, not decorative labels');
+  assert.equal(new Set(stages).size,3,lesson.id+' stages must describe different reasoning actions');
+ }
+ for(const [id,visual] of Object.entries(lessonVisuals)){
+  assert.ok(lessonById[id],id+' visual without lesson');
+  for(const table of [visual.before,visual.after]){
+   assert.ok(table.label&&table.columns.length>=1&&table.rows.length>=1,id+' empty table');
+   assert.ok(table.rows.every(row=>row.length===table.columns.length),id+' malformed visual table');
+  }
+  assert.ok(visual.insight.length>=75,id+' visual must explain the transformation');
+ }
  assert.equal(Object.keys(modulePedagogy).length,modules.length,'Every module must explain why it follows the last');
  const index=Object.fromEntries(lessons.map((lesson,i)=>[lesson.id,i]));
  for(const lesson of lessons){
