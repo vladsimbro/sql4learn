@@ -1,0 +1,18 @@
+// Independent cumulative assessments; do not reuse exercises from lessons.
+export const assessments=[
+ {id:'checkpoint-1',title:'Контрольная 01 · выборки и фильтрация',after:'filter',description:'Впервые собери несколько изученных конструкций в одном запросе.',skills:['SELECT','WHERE','IN','ORDER BY'],tasks:[
+  {id:'checkpoint-1a',title:'Аудит завершённых заказов',prompt:'Отдел качества просит номера, суммы и статусы всех доставленных заказов дороже 1000 рублей. Отсортируй по убыванию суммы, при равенстве — по возрастанию номера.',sql:"SELECT order_id,amount,status FROM orders WHERE status='delivered' AND amount>1000 ORDER BY amount DESC,order_id",ordered:true},
+  {id:'checkpoint-1b',title:'Покупатели для кампании',prompt:'Маркетинг готовит рассылку клиентам из Москвы и Казани. Верни уникальные названия городов подходящих клиентов в алфавитном порядке.',sql:"SELECT DISTINCT city FROM customers WHERE city IN ('Москва','Казань') ORDER BY city",ordered:true}
+ ]},
+ {id:'checkpoint-2',title:'Контрольная 02 · метрики и связи',after:'joins',description:'Проверь, что умеешь строить отчёты без потери строк и без фан-аута.',skills:['GROUP BY','HAVING','LEFT JOIN','NULL'],tasks:[
+  {id:'checkpoint-2a',title:'Полная сводка магазинов',prompt:'Руководитель хочет видеть каждый магазин, включая магазины без заказов: название, число доставленных заказов delivered и выручку от них revenue. При отсутствии заказов выручка должна быть нулевой.',sql:"SELECT s.store_name,COUNT(o.order_id) FILTER(WHERE o.status='delivered') AS delivered,COALESCE(SUM(o.amount) FILTER(WHERE o.status='delivered'),0) AS revenue FROM stores s LEFT JOIN orders o ON o.store_id=s.store_id GROUP BY s.store_id,s.store_name"},
+  {id:'checkpoint-2b',title:'Крупные покупатели',prompt:'Найди имена клиентов, чья сумма доставленных заказов строго превышает 2000 рублей. Покажи имя и total_revenue. Если клиент ещё не заказывал доставку, он не должен попадать в отчёт.',sql:"SELECT c.customer_name,SUM(o.amount) AS total_revenue FROM customers c JOIN orders o ON o.customer_id=c.customer_id WHERE o.status='delivered' GROUP BY c.customer_id,c.customer_name HAVING SUM(o.amount)>2000"}
+ ]},
+ {id:'checkpoint-3',title:'Контрольная 03 · аналитическое мышление',after:'windows',description:'Незнакомые комбинированные задачи на CTE, окна и бизнес-метрики.',skills:['WITH','ROW_NUMBER','LAG','Aggregation'],tasks:[
+  {id:'checkpoint-3a',title:'Самый крупный заказ магазина',prompt:'Для каждого магазина с заказами покажи идентификатор магазина, номер заказа и его сумму — выбирай заказ с максимальной суммой, а при равенстве меньший номер.',sql:"WITH t AS (SELECT store_id,order_id,amount,ROW_NUMBER() OVER(PARTITION BY store_id ORDER BY amount DESC,order_id) AS rn FROM orders) SELECT store_id,order_id,amount FROM t WHERE rn=1"},
+  {id:'checkpoint-3b',title:'Повторные покупки',prompt:'Для каждого покупателя, у которого есть хотя бы два заказа, покажи его идентификатор и количество заказов orders_count. Требуется только одна строка на покупателя.',sql:"SELECT customer_id,COUNT(*) AS orders_count FROM orders GROUP BY customer_id HAVING COUNT(*)>=2"}
+ ]}
+];
+export const assessmentTasks=assessments.flatMap(assessment=>assessment.tasks.map(task=>({...task,assessmentId:assessment.id})));
+export const assessmentById=Object.fromEntries(assessments.map(assessment=>[assessment.id,assessment]));
+export const assessmentTaskById=Object.fromEntries(assessmentTasks.map(task=>[task.id,task]));

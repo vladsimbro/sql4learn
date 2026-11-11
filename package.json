@@ -1,0 +1,16 @@
+{
+  "name": "sql4learn",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Interactive SQL learning academy built with PGlite",
+  "scripts": {
+    "test": "node --test tests/content.test.mjs",
+    "test:browser": "node tests/browser.test.mjs",
+    "serve": "python3 -m http.server 4173"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.15",
+    "playwright": "1.65.0"
+  }
+}

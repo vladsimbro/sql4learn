@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright';
+
+const base=process.env.BASE_URL||'http://127.0.0.1:4173/';
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage({viewport:{width:1400,height:900},acceptDownloads:true});
+const errors=[];
+page.on('pageerror',error=>errors.push(String(error)));
+const clickHash=async(hash)=>{
+ await page.evaluate(value=>{window.location.hash=value;},hash);
+ await page.waitForTimeout(300);
+};
+const localProgress=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('sql4learn-progress-v1')||'{}'));
+try{
+ await page.goto(base+'#/home',{waitUntil:'domcontentloaded'});
+ await page.locator('.hero h1').waitFor({state:'visible'});
+ await page.locator('#engine-status.ready').waitFor({state:'visible',timeout:120000});
+ await clickHash('#/lesson/first-query');
+ await page.locator('#sql-editor').fill('SELECT 12 * 8 AS total;');
+ await page.locator('[data-action="check"]').click();
+ await page.locator('#task-feedback .success').waitFor({timeout:45000});
+ assert.ok((await localProgress()).completed.includes('start-1'));
+ await page.locator('[data-quiz="0"]').click();
+ assert.equal((await localProgress()).quiz['first-query'],0);
+ await page.locator('[data-action="read"]').click();
+ assert.ok((await localProgress()).read.includes('first-query'));
+ await page.reload({waitUntil:'domcontentloaded'});
+ await page.locator('#engine-status.ready').waitFor({state:'visible',timeout:120000});
+ assert.equal(await page.locator('#sql-editor').inputValue(),'SELECT 12 * 8 AS total;','SQL draft persists after reload');
+ await clickHash('#/task/filter-2');
+ await page.locator('#sql-editor').fill("SELECT order_id,status FROM orders WHERE status='cancelled';");
+ await page.locator('[data-action="check"]').click();
+ await page.locator('#task-feedback .error').waitFor({timeout:45000});
+ assert.equal((await localProgress()).completed.includes('filter-2'),false);
+ await page.locator('#sql-editor').fill("SELECT order_id,status FROM orders WHERE status='delivered';");
+ await page.locator('[data-action="check"]').click();
+ await page.locator('#task-feedback .success').waitFor({timeout:45000});
+ assert.ok((await localProgress()).completed.includes('filter-2'));
+ await clickHash('#/exam/checkpoint-1');
+ await page.locator('[data-action="hint"]').count().then(count=>assert.equal(count,0,'Exams do not expose hints'));
+ await page.locator('#sql-editor').fill("SELECT order_id,amount,status FROM orders WHERE status='delivered' AND amount>1000 ORDER BY amount DESC,order_id;");
+ await page.locator('[data-action="check"]').click();
+ await page.locator('#task-feedback .success').waitFor({timeout:45000});
+ assert.ok((await localProgress()).completed.includes('checkpoint-1a'));
+ await clickHash('#/playground');
+ await page.locator('#sql-editor').fill('DELETE FROM orders;');
+ await page.locator('[data-action="run"]').click();
+ await page.locator('#task-feedback .error').waitFor();
+ await page.locator('#sql-editor').fill('SELECT COUNT(*) AS total FROM orders;');
+ await page.locator('[data-action="run"]').click();
+ await page.locator('#task-result td').waitFor({state:'visible'});
+ assert.equal((await page.locator('#task-result td').first().textContent()).trim(),'18','Read-only safeguard must preserve data');
+ await page.locator('#theme-toggle').click();
+ assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
+ await clickHash('#/practice');
+ assert.equal(await page.locator('.exercise-card').count(),58);
+ await page.setViewportSize({width:390,height:844});
+ await page.locator('#menu-toggle').click();
+ assert.ok(await page.locator('#sidebar').evaluate(el=>el.classList.contains('open')),'Mobile navigation should open');
+ await page.locator('#sidebar [data-page="course"]').click();
+ await page.locator('.module-card').first().waitFor();
+ assert.equal(await page.locator('.module-card').count(),6);
+ assert.deepEqual(errors,[],'No runtime JavaScript exceptions');
+ console.log('Browser verification passed: live PostgreSQL, correct/incorrect answers, exam integrity, persistence, read-only SQL, theme, mobile navigation.');
+}finally{
+ await browser.close();
+}
