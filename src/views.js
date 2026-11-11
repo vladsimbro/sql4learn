@@ -4,6 +4,7 @@ import {xrayScenarios,xrayById} from './xray.js';
 import {clinicTasks,clinicTaskById} from './clinic.js';
 import {SCHEMA} from './data.js';
 import {SUPPORT_SCHEMA} from './project-data.js';
+import {INVENTORY_SCHEMA} from './inventory-data.js';
 import {independentProjects,independentProjectById} from './portfolio.js';
 import {reviewSkills,reviewSkillById,reviewStatus,reviewTask} from './review-bank.js';
 import {mastery} from './progress.js';
@@ -147,15 +148,15 @@ function masteryPanel(state,l){const m=mastery(state.progress,l);return `<sectio
  <p class="small muted">Отметка чтения сама по себе не подтверждает владение SQL.</p>
  <button class="btn small" data-action="read" data-lesson="${l.id}">${m.read?'✓ Материал прочитан':'Отметить прочитанным'}</button></section>`;}
 function schemaPanel(state,scope=''){
- const available=scope?SUPPORT_SCHEMA:SCHEMA;
+ const available=scope==='support.'?SUPPORT_SCHEMA:scope==='inventory.'?INVENTORY_SCHEMA:SCHEMA;
  const names=Object.keys(available);
  const name=Object.hasOwn(available,state.schema)?state.schema:names[0];
  const selected=available[name]||[];
  const preview=state.previewTable?.name===name?state.previewTable.query:null;
- return `<section class="card side-card"><h3>${scope?'Новая предметная область · support':'Учебная база / схема'}</h3>
+ return `<section class="card side-card"><h3>${scope?'Самостоятельная схема · '+esc(scope.slice(0,-1)):'Учебная база / схема'}</h3>
  <div class="schema-menu">${names.map(key=>`<button data-schema="${esc(key)}" class="${key===name?'active':''}">${esc(key)}</button>`).join('')}</div>
  <table class="schema-table"><tbody>${selected.map(([column,type])=>`<tr><td>${esc(column)}</td><td>${esc(type)}</td></tr>`).join('')}</tbody></table>
- ${scope?`<button class="btn small" data-action="preview-schema" data-table-name="${esc(name)}" ${!state.engineReady?'disabled':''} style="margin-top:12px">Посмотреть первые 8 строк</button>${preview?renderQueryTable(preview):''}<p class="small muted">Таблицы находятся в отдельной схеме PostgreSQL <code>support</code>. Исследуй состав данных перед решением.</p>`:`<p class="small muted" style="line-height:1.6;margin:13px 0 0">Видны настоящие таблицы PostgreSQL, доступные во всех упражнениях.</p>`}
+ ${scope?`<button class="btn small" data-action="preview-schema" data-table-name="${esc(name)}" ${!state.engineReady?'disabled':''} style="margin-top:12px">Посмотреть первые 8 строк</button>${preview?renderQueryTable(preview):''}<p class="small muted">Таблицы находятся в отдельной схеме PostgreSQL <code>${esc(scope.slice(0,-1))}</code>. Исследуй состав данных перед решением.</p>`:`<p class="small muted" style="line-height:1.6;margin:13px 0 0">Видны настоящие таблицы PostgreSQL, доступные во всех упражнениях.</p>`}
  </section>`;}
 function activeTask(state,l){return l.tasks.find(t=>t.id===state.activeTaskId)||l.tasks[0];}
 export function renderLesson(state,id){
@@ -259,15 +260,15 @@ export function renderRecall(state){
 }
 
 export function renderProjects(state){
- return header('ПРОЕКТЫ / РЕАЛЬНЫЕ КЕЙСЫ','Аналитическая мастерская','Настоящий самостоятельный кейс на незнакомых данных — отдельно от двух тренировочных историй, собранных из заданий курса.')+
- `<div class="independent-project-highlight card">
+ return header('ПРОЕКТЫ / РЕАЛЬНЫЕ КЕЙСЫ','Аналитическая мастерская','Самостоятельные исследования разных бизнес-доменов — отдельно от двух тренировочных историй, собранных из заданий курса.')+
+ independentProjects.map(p=>`<div class="independent-project-highlight card">
    <div class="independent-project-copy"><p class="section-eyebrow">НОВЫЙ САМОСТОЯТЕЛЬНЫЙ ПРОЕКТ · ОТДЕЛЬНАЯ СХЕМА</p>
-   <h2>Support Ops · Аудит службы поддержки</h2>
-   <p>Новая предметная область, которой не было в уроках: компании, операторы, заявки и история событий. Шесть независимых бизнес-отчётов и аналитическая записка. Никаких готовых алгоритмов.</p>
-   <div class="project-feature-meta">${pill(independentProjects[0].tasks.filter(t=>done(state,t.id)).length+'/6 SQL-отчётов','teal')}${pill('PostgreSQL · схема support','neutral')}${pill('2 набора данных','neutral')}</div>
-   ${button('Открыть самостоятельный проект',`#/project/${independentProjects[0].id}`,true)}</div>
-   <div class="independent-project-symbol" aria-hidden="true"><span>ANALYTICS</span><strong>SUPPORT<br>OPS_</strong><span>SQL PORTFOLIO</span></div>
- </div><p class="section-eyebrow" style="margin:25px 0 15px">УЧЕБНЫЕ КЕЙСЫ ИЗ ПРОЙДЕННЫХ МОДУЛЕЙ</p>`+
+   <h2>${esc(p.title)}</h2>
+   <p>${esc(p.problem)} ${p.tasks.length} независимых SQL-отчётов и аналитическая записка. Без готового алгоритма.</p>
+   <div class="project-feature-meta">${pill(p.tasks.filter(t=>done(state,t.id)).length+'/'+p.tasks.length+' SQL-отчётов','teal')}${pill('PostgreSQL · схема '+p.schemaPrefix.slice(0,-1),'neutral')}${pill('2 набора данных','neutral')}</div>
+   ${button('Открыть самостоятельный проект',`#/project/${p.id}`,true)}</div>
+   <div class="independent-project-symbol" aria-hidden="true"><span>ANALYTICS</span><strong>${p.id==='support-ops'?'SUPPORT<br>OPS_':'STOCK<br>AUDIT_'}</strong><span>SQL PORTFOLIO</span></div>
+ </div>`).join('')+`<p class="section-eyebrow" style="margin:25px 0 15px">УЧЕБНЫЕ КЕЙСЫ ИЗ ПРОЙДЕННЫХ МОДУЛЕЙ</p>`+
   `<div class="colgap">${projects.map((p,i)=>`
   <section class="card project-hero"><div><p class="section-eyebrow">АНАЛИТИЧЕСКИЙ КЕЙС ${String(i+1).padStart(2,'0')}</p><h2>${esc(p.title)}</h2>
   <p>${esc(p.lead)}</p>
@@ -279,7 +280,7 @@ export function renderProjects(state){
   <section class="card panel"><h2 class="panel-title">${esc(p.subtitle)} — этапы</h2><div class="lesson-list">
    ${p.taskIds.map((id,n)=>{const t=taskById[id];return `<a class="${done(state,id)?'done':''}" href="#/task/${id}"><span class="lesson-number">${String(n+1).padStart(2,'0')}</span><span>${esc(t?.title||id)}</span><small>${done(state,id)?'✓ Выполнено':'Открыть'}</small></a>`}).join('')}
   </div></section>`).join('')}</div>
- <section class="card panel" style="margin-top:17px"><p class="small muted" style="line-height:1.8">Эти два кейса объединяют задачи уже изученных модулей. Полноценный самостоятельный проект Support Ops находится выше. Проверка аналитических выводов экспертом и портфолио-подтверждение пока не реализованы.</p></section>`;
+ <section class="card panel" style="margin-top:17px"><p class="small muted" style="line-height:1.8">Эти два кейса объединяют задачи уже изученных модулей. Полноценные самостоятельные проекты на двух разных предметных областях находятся выше. Проверка аналитических выводов экспертом и портфолио-подтверждение пока не реализованы.</p></section>`;
 }
 
 export function renderIndependentProject(state,id){
@@ -297,7 +298,7 @@ export function renderIndependentProject(state,id){
    <div class="feedback info"><strong>Как проходить</strong>Изучи структуру и реальные строки таблиц в правой колонке. Выбирай порядок исследования самостоятельно. В проекте нет подсказок и готового решения до зачёта; SQL проверяется на другом наборе данных.</div>
    </section>
    <section class="card panel project-deliverables">
-    <p class="section-eyebrow">РЕЗУЛЬТАТЫ ИССЛЕДОВАНИЯ</p><h2 class="panel-title">Шесть связанных SQL-отчётов</h2>
+    <p class="section-eyebrow">РЕЗУЛЬТАТЫ ИССЛЕДОВАНИЯ</p><h2 class="panel-title">${project.tasks.length} связанных SQL-отчётов</h2>
     <div class="project-task-tabs">${project.tasks.map((t,i)=>`<button data-project-task="${t.id}" class="tab ${t.id===task.id?'active':''}">${done(state,t.id)?'✓ ':''}Этап ${i+1}</button>`).join('')}</div>
     <div class="learning-objective"><b>Контракт результата:</b> ${esc(task.deliverable)}</div>
     <p class="small muted">Форма ответа нужна для воспроизводимого отчёта; способ решения ты выбираешь сам.</p>
@@ -307,7 +308,7 @@ export function renderIndependentProject(state,id){
     <p class="section-eyebrow">АНАЛИТИЧЕСКАЯ ЗАПИСКА</p><h2 class="panel-title">Что показали данные?</h2>
     <p class="project-paragraph">${esc(project.reviewPrompt)}</p>
     <label for="project-notes">Твои выводы и аргументы</label>
-    <textarea id="project-notes" data-project-id="${esc(id)}" maxlength="4000" rows="6" placeholder="Опиши ключевые показатели, проблемы SLA, возможные причины и ограничения выводов.">${esc(note)}</textarea>
+    <textarea id="project-notes" data-project-id="${esc(id)}" maxlength="4000" rows="6" placeholder="Опиши ключевые показатели, риски, проверки расчётов и ограничения выводов.">${esc(note)}</textarea>
     <p class="small muted">Заметка сохраняется локально и включается в резервную копию. Она не оценивается автоматически; без профессиональной проверки нельзя считать защиту проекта пройденной.</p>
     <div class="project-summary">${pill(passed===project.tasks.length?'Все SQL-отчёты проверены':passed+' из '+project.tasks.length+' SQL-отчётов',passed===project.tasks.length?'teal':'neutral')}
       ${pill(note.trim().length>0?'Выводы записаны (без оценки)':'Выводы пока не записаны','neutral')}</div>
