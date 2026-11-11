@@ -135,6 +135,10 @@ test('Progress is scoped to authored IDs and backups cannot import arbitrary sta
  assert.deepEqual(scheduled.review,{'recall-first':{level:3,nextDueAt:1770000000000,misses:2}});
  assert.deepEqual(importProgress(exportProgress(scheduled)).review,scheduled.review);
  assert.deepEqual(importProgress(exportProgress(source)).projectNotes,progress.projectNotes);
+ const newCase=normalizeProgress({version:1,completed:['portfolio-support-1','portfolio-inventory-1'],drafts:{'portfolio-inventory-1':'WITH book AS (SELECT 1) SELECT * FROM book'},projectNotes:{'inventory-audit':'Нужна сверка старого пересчёта.'}});
+ assert.deepEqual(newCase.completed,['portfolio-support-1','portfolio-inventory-1'],'Adding second case must not invalidate the original portfolio progress');
+ assert.match(importProgress(exportProgress(newCase)).projectNotes['inventory-audit'],/пересчёта/,'Inventory narrative must round-trip through existing backup format');
+ assert.match(importProgress(exportProgress(newCase)).drafts['portfolio-inventory-1'],/WITH book/,'New draft must survive export and import');
  assert.deepEqual(normalizeProgress({version:1,completed:['start-1']}).projectNotes,{},'Older backup remains valid after new project notes are introduced');
  assert.equal(importProgress(exportProgress(source)).theme,'dark');
  assert.throws(()=>importProgress('{"product":"other","format":1,"progress":{}}'));
