@@ -115,7 +115,7 @@ function renderWalkthrough(l){
  return `<div class="lesson-walkthrough" id="lesson-walkthrough"><p class="section-eyebrow">ЛОГИКА БЕЗ ЗУБРЁЖКИ</p><h2>Разберём на маленьком примере</h2>
  <p>Пройди эти шаги мысленно, а затем сравни с результатом настоящего запроса ниже. Здесь важнее понять, почему меняются строки, чем запомнить команду.</p>
  <div class="walkthrough-steps">${steps.map((step,i)=>`<article class="walkthrough-step"><div class="walkthrough-step-header"><span>${i+1}</span><strong>${esc(stageNames[i])}</strong></div><p>${esc(step)}</p></article>`).join('')}</div>
- ${visual?`<div class="walkthrough-visual"><h3>${esc(visual.title)}</h3><div class="walkthrough-tables">${grid(visual.before)}<span class="walkthrough-arrow" aria-hidden="true">→</span>${grid(visual.after)}</div><p class="walkthrough-insight">${esc(visual.insight)}</p></div>`:''}</div>`;
+ ${visual?`<div class="walkthrough-visual"><h3>${esc(visual.title)}</h3><p class="walkthrough-disclaimer">Это условный маленький пример для объяснения, а не строки учебной базы. Ниже ты запустишь настоящий SQL.</p><div class="walkthrough-tables">${grid(visual.before)}<span class="walkthrough-arrow" aria-hidden="true">→</span>${grid(visual.after)}</div><p class="walkthrough-insight">${esc(visual.insight)}</p></div>`:''}</div>`;
 }
 function quiz(state,l){
  const selection=state.progress.quiz[l.id],hasAnswer=Number.isInteger(selection);
