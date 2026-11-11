@@ -138,3 +138,8 @@
 .lesson-hints summary{cursor:pointer;font-size:11px;font-weight:750;color:var(--blue);line-height:1.6}
 .lesson-hints details p{color:var(--muted);font-size:11px;line-height:1.8;margin:9px 0 0}
 @media(max-width:920px){.walkthrough-steps{grid-template-columns:1fr}.walkthrough-tables{grid-template-columns:1fr}.walkthrough-arrow{transform:rotate(90deg);padding:4px}}
+
+/* The error explanation appears only inside a course lesson. */
+.feedback-diff{margin-top:12px;padding:11px 13px;border:1px solid var(--border);border-radius:10px;background:var(--paper);color:var(--ink)}
+.feedback-diff>strong{display:block;font-size:11px;margin-bottom:5px;color:var(--ink)}
+.feedback-diff>p{font-size:11px;line-height:1.8;margin:6px 0;overflow-wrap:anywhere;color:var(--ink)}
