@@ -18,7 +18,7 @@ const skill=(state,module)=> {
  const all=module.lessons.flatMap(l=>l.tasks),passed=all.filter(t=>done(state,t.id)).length;
  return {passed,total:all.length,percent:percentage(passed,all.length)};
 };
-const lessonDone=(state,l)=>l.tasks.length>0&&l.tasks.every(t=>done(state,t.id))&&state.progress.quiz[l.id]===l.quiz.correct;
+const lessonDone=(state,l)=>l.tasks.length>0&&(l.tasks.every(t=>done(state,t.id))||state.progress.legacyMastered?.includes(l.id))&&state.progress.quiz[l.id]===l.quiz.correct;
 const button=(label,href,primary=false)=>`<a class="btn ${primary?'primary':''}" href="${href}">${esc(label)}</a>`;
 const pill=(label,style='')=>`<span class="pill ${style}">${esc(label)}</span>`;
 const header=(eyebrow,title,description,action='')=>`<div class="page-header"><div><p class="section-eyebrow">${esc(eyebrow)}</p><h1>${esc(title)}</h1><p>${esc(description)}</p></div>${action}</div>`;
@@ -187,7 +187,7 @@ function masteryPanel(state,l){const m=mastery(state.progress,l);return `<sectio
  <div class="skill-list"><div class="skill-row"><strong>Материал</strong><div class="progress-track"><span style="width:${m.read?100:0}%"></span></div><small>${m.read?'✓':'—'}</small></div>
  <div class="skill-row"><strong>Понимание</strong><div class="progress-track"><span style="width:${m.quiz?100:0}%"></span></div><small>${m.quiz?'✓':'—'}</small></div>
  <div class="skill-row"><strong>SQL</strong><div class="progress-track"><span style="width:${percentage(m.completed,m.total)}%"></span></div><small>${m.completed}/${m.total}</small></div></div>
- <p class="small muted">Отметка чтения сама по себе не подтверждает владение SQL.</p>
+ ${m.grandfathered?'<p class="small muted">Зачёт старой версии сохранён. Появились новые упражнения для дополнительного закрепления.</p>':'<p class="small muted">Отметка чтения сама по себе не подтверждает владение SQL.</p>'}
  <button class="btn small" data-action="read" data-lesson="${l.id}">${m.read?'✓ Материал прочитан':'Отметить прочитанным'}</button></section>`;}
 function schemaPanel(state,scope=''){
  const available=scope==='support.'?SUPPORT_SCHEMA:scope==='inventory.'?INVENTORY_SCHEMA:SCHEMA;
