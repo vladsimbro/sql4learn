@@ -19,6 +19,11 @@ try{
  await clickHash('#/lesson/first-query');
  assert.match(await page.locator('.lesson-goal').textContent(),/Вычислить значение/,'Every lesson must show an explicit, assessable outcome');
  assert.match(await page.locator('.lesson-prediction').textContent(),/7 \+ 5/,'Each lesson needs a subject-specific prediction');
+ assert.equal(await page.locator('.walkthrough-step').count(),3,'Each lesson must show three concrete reasoning steps');
+ assert.equal(await page.locator('.lesson-hints details').count(),3,'Lesson help must be progressive and collapsed by default');
+ assert.equal(await page.locator('.lesson-hints details[open]').count(),0,'Hints should not spoil independent practice');
+ await page.locator('.lesson-hints summary').first().click();
+ assert.equal(await page.locator('.lesson-hints details[open]').count(),1,'Learner can open a targeted hint');
  await page.locator('#example-prediction').fill('2');
  await page.locator('[data-action="run-example"]').click();
  await page.locator('.prediction-result.review').waitFor({state:'visible'});
@@ -89,6 +94,9 @@ try{
  await clickHash('#/module/windows');
  assert.match(await page.locator('.lesson-list').textContent(),/LAST_VALUE/,'Extended window lessons must be part of curriculum');
  await clickHash('#/course');
+ await clickHash('#/lesson/group-by');
+ assert.equal(await page.locator('.walkthrough-table').count(),2,'GROUP BY must have genuine before-after data tables');
+ assert.match(await page.locator('.walkthrough-insight').textContent(),/GROUP BY/,'Explain the visualised change in grain');
  await clickHash('#/lesson/limit-top');
  await page.locator('.lesson-heading h1').waitFor();
  assert.match(await page.locator('.lesson-heading h1').textContent(),/LIMIT/);
