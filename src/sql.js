@@ -41,19 +41,43 @@ export const normalizeResult=result=>({
   columns:(result.fields||[]).map(field=>field.name),
   rows:(result.rows||[]).map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,value])))
 });
+// Provide a small, concrete difference without exposing the expected SQL source.
+const readableRow=(row,columns)=>columns.map(column=>{
+ const value=row[column];
+ const printed=value===null?'NULL':value instanceof Date?value.toISOString():typeof value==='object'?JSON.stringify(value):String(value);
+ return column+'='+printed;
+}).join(', ').slice(0,240);
+const countsOf=signatures=>{
+ const counts=new Map();
+ for(const signature of signatures)counts.set(signature,(counts.get(signature)||0)+1);
+ return counts;
+};
 export function compareResults(actual,expected,ordered=false){
-  const a=normalizeResult(actual),e=normalizeResult(expected);
-  if(a.columns.length!==e.columns.length || new Set(a.columns).size!==a.columns.length || JSON.stringify([...a.columns].sort())!==JSON.stringify([...e.columns].sort()))
-    return {ok:false,type:'columns',message:'Состав или названия столбцов отличаются от ожидаемых. Проверь SELECT и псевдонимы.'};
-  if(a.rows.length!==e.rows.length)
-    return {ok:false,type:'rows',message:'Количество строк отличается: получено '+a.rows.length+', ожидалось '+e.rows.length+'. Проверь фильтрацию, JOIN и зерно результата.'};
-  const columns=[...e.columns].sort();
-  const signature=rows=>rows.map(row=>JSON.stringify(columns.map(col=>canonical(row[col]))));
-  const left=signature(a.rows),right=signature(e.rows);
-  if(!ordered){left.sort();right.sort();}
-  if(JSON.stringify(left)!==JSON.stringify(right))
-    return {ok:false,type:'values',message:ordered?'Значения или порядок строк отличаются. Проверь ORDER BY и дополнительный ключ сортировки.':'Значения или повторения строк отличаются. Проверь расчёт и связи между таблицами.'};
-  return {ok:true,type:'success',message:'Результат корректен: столбцы, значения и количество повторений совпадают.'};
+ const a=normalizeResult(actual),e=normalizeResult(expected);
+ const actualColumns=new Set(a.columns),expectedColumns=new Set(e.columns);
+ if(a.columns.length!==e.columns.length||actualColumns.size!==a.columns.length||JSON.stringify([...a.columns].sort())!==JSON.stringify([...e.columns].sort()))
+   return {ok:false,type:'columns',message:'Состав или названия столбцов отличаются от ожидаемых. Проверь SELECT и псевдонимы.',
+     details:{kind:'columns',missing:e.columns.filter(column=>!actualColumns.has(column)),extra:a.columns.filter(column=>!expectedColumns.has(column))}};
+ if(a.rows.length!==e.rows.length)
+   return {ok:false,type:'rows',message:'Количество строк отличается: получено '+a.rows.length+', ожидалось '+e.rows.length+'. Проверь фильтрацию, JOIN и зерно результата.',
+     details:{kind:'rows',actual:a.rows.length,expected:e.rows.length}};
+ const columns=[...e.columns].sort();
+ const signature=rows=>rows.map(row=>JSON.stringify(columns.map(col=>canonical(row[col]))));
+ const actualSignatures=signature(a.rows),expectedSignatures=signature(e.rows);
+ const left=ordered?actualSignatures:actualSignatures.slice().sort(),right=ordered?expectedSignatures:expectedSignatures.slice().sort();
+ if(JSON.stringify(left)!==JSON.stringify(right)){
+   if(ordered){
+     const position=actualSignatures.findIndex((row,i)=>row!==expectedSignatures[i]);
+     return {ok:false,type:'values',message:'Значения или порядок строк отличаются. Проверь ORDER BY и дополнительный ключ сортировки.',
+       details:{kind:'ordered',row:position+1,expected:readableRow(e.rows[position],columns),actual:readableRow(a.rows[position],columns)}};
+   }
+   const actualCounts=countsOf(actualSignatures),expectedCounts=countsOf(expectedSignatures);
+   const missingIndex=expectedSignatures.findIndex(sign=>(expectedCounts.get(sign)||0)>(actualCounts.get(sign)||0));
+   const extraIndex=actualSignatures.findIndex(sign=>(actualCounts.get(sign)||0)>(expectedCounts.get(sign)||0));
+   return {ok:false,type:'values',message:'Значения или повторения строк отличаются. Проверь расчёт и связи между таблицами.',
+     details:{kind:'values',missing:missingIndex<0?null:readableRow(e.rows[missingIndex],columns),extra:extraIndex<0?null:readableRow(a.rows[extraIndex],columns)}};
+ }
+ return {ok:true,type:'success',message:'Результат корректен: столбцы, значения и количество повторений совпадают.'};
 }
 const dbQueues=new WeakMap();
 export function queryReadOnly(db,sql){
