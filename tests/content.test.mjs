@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
-import {modules,lessons,tasks,upcomingModules,taskById,lessonById} from '../src/content.js';
+import {modules,lessons,tasks,projects,upcomingModules,taskById,lessonById} from '../src/content.js';
 import {assessments,assessmentTasks} from '../src/assessments.js';
 import {clinicTasks} from '../src/clinic.js';
 import {xrayScenarios} from '../src/xray.js';
@@ -22,6 +22,8 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
  assert.equal(new Set(lessons.map(x=>x.id)).size,lessons.length);
  assert.equal(new Set(all.map(x=>x.id)).size,all.length);
  assert.ok(upcomingModules.length>=4);
+ assert.equal(projects.length,2);
+ for(const project of projects){assert.equal(project.taskIds.length,4);for(const id of project.taskIds)assert.ok(taskById[id],project.id+' references an unknown task');}
  assert.ok(lessons[0].tasks.length>=2);
  for(const lesson of lessons){
   assert.ok(lesson.lead.length>35 && lesson.insight.length>80,lesson.id);
@@ -78,6 +80,9 @@ test('Every SQL answer executes on original and adversarial PostgreSQL fixtures'
   const rowCounts=await base.query('SELECT (SELECT COUNT(*) FROM orders) AS orders_count, (SELECT COUNT(*) FROM stores) AS stores_count');
   assert.equal(Number(rowCounts.rows[0].orders_count),18);
   assert.equal(Number(rowCounts.rows[0].stores_count),6);
+  const prodCounts=await base.query('SELECT (SELECT COUNT(*) FROM app_users) AS users, (SELECT COUNT(*) FROM user_events) AS events');
+  assert.equal(Number(prodCounts.rows[0].users),13);
+  assert.equal(Number(prodCounts.rows[0].events),39);
   const noEvents=await base.query('SELECT COUNT(*) AS n FROM user_events WHERE user_id=15');
   assert.equal(Number(noEvents.rows[0].n),0,'Control user must have no events');
   const premature=await base.query("SELECT COUNT(*) AS n FROM user_events WHERE user_id=10 AND event_type='purchase' AND event_at < (SELECT MIN(event_at) FROM user_events WHERE user_id=10 AND event_type='view')");
