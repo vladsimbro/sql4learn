@@ -19,7 +19,7 @@ const all=[...tasks,...assessmentTasks,...clinicTasks,...independentProjectTasks
 test('Only real finished lessons are offered, with unique skill and task IDs',()=>{
  assert.equal(modules.length,9);
  assert.equal(lessons.length,58);
- assert.equal(tasks.length,161);
+ assert.equal(tasks.length,175);
  assert.equal(assessments.length,6);
  for(const id of ['text-normalize','text-extract','type-cast','numeric-expr','safe-ratios','keys-relations','cross-join','self-join','set-union','set-compare','not-exists-null','window-lead','window-moving','window-first-last'])assert.ok(lessonById[id],'Missing core SQL subject: '+id);
  assert.ok(lessons.findIndex(l=>l.id==='keys-relations')<lessons.findIndex(l=>l.id==='inner'),'Teach PK/FK before JOIN');
