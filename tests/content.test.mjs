@@ -17,8 +17,8 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
  assert.equal(assessments.length,4);
  assert.equal(assessmentTasks.length,8);
  assert.equal(clinicTasks.length,8);
- assert.equal(xrayScenarios.length,4);
- assert.equal(xrayScenarios.flatMap(x=>x.steps).length,15);
+ assert.equal(xrayScenarios.length,5);
+ assert.equal(xrayScenarios.flatMap(x=>x.steps).length,19);
  assert.equal(new Set(lessons.map(x=>x.id)).size,lessons.length);
  assert.equal(new Set(all.map(x=>x.id)).size,all.length);
  assert.ok(upcomingModules.length>=4);
