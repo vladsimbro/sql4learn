@@ -138,11 +138,26 @@ function taskEditor(state,task,exam=false,withHelp=false){
   <div id="task-feedback">${result?renderFeedback(result):''}</div><div id="task-result">${result?.query?renderQueryTable(result.query):''}</div>
  </section>`;
 }
+function renderDifference(details){
+ if(!details)return '';
+ let lines=[];
+ if(details.kind==='columns'){
+  if(details.missing.length)lines.push('Не хватает столбцов: '+details.missing.join(', '));
+  if(details.extra.length)lines.push('Лишние столбцы: '+details.extra.join(', '));
+ }
+ if(details.kind==='rows')lines.push('Твой запрос: '+details.actual+' строк. Ожидаемый результат: '+details.expected+' строк. Проверь, что каждая итоговая строка означает нужную сущность.');
+ if(details.kind==='ordered')lines.push('Первое расхождение — строка №'+details.row+'. Ожидалось: '+details.expected+'. Получилось: '+details.actual+'.');
+ if(details.kind==='values'){
+  if(details.missing)lines.push('Пример недостающей строки: '+details.missing);
+  if(details.extra)lines.push('Пример лишней строки: '+details.extra);
+ }
+ return lines.length?'<div class="feedback-diff"><strong>Где именно расходится результат</strong>'+lines.map(s=>'<p>'+esc(s)+'</p>').join('')+'</div>':'';
+}
 export function renderFeedback(result){
  if(result.loading)return '<div class="feedback info">Выполняем запрос и проверяем результат на двух наборах данных…</div>';
  if(result.error)return `<div class="feedback error"><strong>PostgreSQL вернул ошибку</strong>${esc(result.error)}</div>`;
  if(result.passed)return '<div class="feedback success"><strong>Задача зачтена</strong>Запрос дал правильный результат на основном и дополнительном наборе данных. Эквивалентные варианты решения принимаются.</div>';
- if(result.message)return `<div class="feedback ${result.gradeFailed?'error':'info'}"><strong>${result.gradeFailed?'Решение пока не зачтено':'Запрос выполнен'}</strong>${esc(result.message)}</div>`;
+ if(result.message)return `<div class="feedback ${result.gradeFailed?'error':'info'}"><strong>${result.gradeFailed?'Решение пока не зачтено':'Запрос выполнен'}</strong>${esc(result.message)}${result.gradeFailed?renderDifference(result.details):''}</div>`;
  return '';
 }
 const formatted=value=>value===null?'<span class="null-token">NULL</span>':esc(value instanceof Date?value.toISOString():typeof value==='object'?JSON.stringify(value):String(value));
