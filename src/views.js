@@ -124,7 +124,22 @@ function quiz(state,l){
  ${hasAnswer?`<div class="feedback ${selection===l.quiz.correct?'success':'error'}"><strong>${selection===l.quiz.correct?'Верно.':'Есть ошибка — попробуй ещё раз.'}</strong>${esc(l.quiz.why)}</div>`:''}</section>`;
 }
 const flow={start:['SELECT','Вычисление выражений','Таблица результата'],filter:['FROM','WHERE','SELECT','ORDER BY'],aggregate:['FROM','WHERE','GROUP BY','Агрегаты','HAVING','SELECT'],dates:['Календарные границы','FROM / generate_series','JOIN / WHERE','GROUP BY период','SELECT'],joins:['FROM','JOIN ... ON','WHERE','SELECT'],cte:['WITH: этапы','Внешний SELECT','Результат'],windows:['Исходные строки','PARTITION BY','ORDER BY','OVER: значение'],product:['События','Зерно и уникальные люди','JOIN / CTE','Когорта / канал','Агрегаты и метрика'],audit:['Выбрать зерно','Проверить ключи','Свернуть детали','JOIN / CTE','Сверить метрику']};
-function flowChart(m){const items=flow[m]||flow.start;return `<div class="flow-steps">${items.map((item,i)=>`${i?'<i>→</i>':''}<span>${esc(item)}</span>`).join('')}</div>`;}
+// Specific flows keep UNION, aggregates and windows from inheriting misleading JOIN diagrams.
+const lessonFlows={
+ 'keys-relations':['PK справочника','FK заказа','Число совпадений','Зерно ответа'],
+ 'cross-join':['Таблица A','Таблица B','Все пары A × B','Дополнительный WHERE'],
+ 'self-join':['Источник a','Тот же источник b','Условие связи','Исключение зеркальных пар'],
+ 'logical-order':['FROM / JOIN','WHERE','GROUP BY','HAVING','SELECT','ORDER BY','LIMIT'],
+ 'set-union':['SELECT A','SELECT B','UNION / UNION ALL','Повторы','Результат'],
+ 'set-compare':['Набор A','Набор B','INTERSECT / EXCEPT','Общие / отсутствующие'],
+ 'safe-ratios':['Подходящие строки','Числитель','NULLIF(знаменатель,0)','Процент'],
+ 'string-agg':['Строки группы','ORDER BY внутри агрегата','STRING_AGG','Одна подпись'],
+ 'correlated-scalar':['Внешняя строка','Связанный SELECT','Одно значение','Следующая строка'],
+ 'window-ntile':['ORDER BY','PARTITION BY','NTILE / PERCENT_RANK','Новый столбец'],
+ 'stat-median':['Подходящие суммы','ORDER BY внутри PERCENTILE','Медиана / перцентиль','Один итог'],
+ 'rollup-totals':['GROUP BY фактов','ROLLUP / GROUPING SETS','Подытоги','Общий итог']
+};
+function flowChart(m,lessonId){const items=lessonFlows[lessonId]||flow[m]||flow.start;return `<div class="flow-steps">${items.map((item,i)=>`${i?'<i>→</i>':''}<span>${esc(item)}</span>`).join('')}</div>`;}
 function taskEditor(state,task,exam=false,withHelp=false){
  const note=state.progress.drafts[task.id]??task.brokenSQL??'',result=state.result?.taskId===task.id?state.result:null;
  return `<section class="card lesson-task" id="task-editor">
@@ -202,7 +217,7 @@ export function renderLesson(state,id){
  <pre class="sql-code">${esc(l.example)}</pre>
  <div class="task-actions"><button class="btn" data-action="run-example" data-example-id="${esc(l.id)}" ${!state.engineReady?'disabled':''}>Выполнить и проверить предположение</button></div>
  <div id="lesson-example-result" aria-live="polite">${state.exampleResult?.lessonId===l.id?(state.exampleResult.error?`<div class="feedback error"><strong>Ошибка выполнения примера</strong>${esc(state.exampleResult.error)}</div>`:renderQueryTable(state.exampleResult.query)):''}</div>
- <p class="small muted">Логический путь от исходных данных к результату</p>${flowChart(m.id)}
+ <p class="small muted">Логический путь от исходных данных к результату</p>${flowChart(m.id,l.id)}
  <p><strong>Почему это важно.</strong> ${esc(l.insight)}</p>${misconceptionGuide(l)}</section>
  <div id="lesson-quiz">${quiz(state,l)}</div>
  <div class="lesson-tools">${l.tasks.map((task,i)=>`<button class="tab ${task.id===t.id?'active':''}" data-task-tab="${task.id}">${done(state,task.id)?'✓ ':''}Задача ${i+1}</button>`).join('')}</div>
