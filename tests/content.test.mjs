@@ -7,6 +7,7 @@ import {clinicTasks} from '../src/clinic.js';
 import {xrayScenarios} from '../src/xray.js';
 import {SEED_SQL,ALTERNATE_SQL,SCHEMA} from '../src/data.js';
 import {SUPPORT_SCHEMA,SUPPORT_SEED_SQL,SUPPORT_ALTERNATE_SQL} from '../src/project-data.js';
+import {INVENTORY_SCHEMA,INVENTORY_SEED_SQL,INVENTORY_ALTERNATE_SQL} from '../src/inventory-data.js';
 import {independentProjects,independentProjectTasks,independentProjectTaskById} from '../src/portfolio.js';
 import {reviewSkills,reviewStatus,reviewTask,advanceReview,reviewUnlocked,REVIEW_INTERVALS_DAYS} from '../src/review-bank.js';
 import {splitSQL,ensureSelect,queryReadOnly,compareResults,gradeSQL} from '../src/sql.js';
@@ -29,13 +30,17 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
  assert.ok(xrayScenarios.some(x=>x.id==='logical-order'&&x.steps.length===6),'SQL logical order must have a live multi-stage data-flow demonstration');
  assert.ok(upcomingModules.length>=3);
  assert.equal(projects.length,2);
- assert.equal(independentProjects.length,1,'Release includes a genuinely independent project rather than relabelled lesson tasks');
+ assert.equal(independentProjects.length,2,'Release must include two genuinely distinct independent business domains');
+ assert.deepEqual(independentProjects.map(p=>p.schemaPrefix),['support.','inventory.']);
  assert.equal(reviewSkills.length,9);
  assert.equal(reviewSkills.flatMap(x=>x.variants).length,27);
  assert.equal(new Set(reviewSkills.map(x=>x.id)).size,9);
  assert.equal(new Set(reviewSkills.flatMap(x=>x.variants.map(v=>v.prompt))).size,27,'Every repetition variant must use a different business framing');
- assert.equal(independentProjectTasks.length,6);
+ assert.equal(independentProjectTasks.length,12);
+ assert.equal(new Set(independentProjectTasks.map(t=>t.id)).size,12,'Each case needs stable original report IDs');
  assert.equal(Object.keys(SUPPORT_SCHEMA).length,4);
+ assert.equal(Object.keys(INVENTORY_SCHEMA).length,5);
+ assert.ok(independentProjectTaskById['portfolio-inventory-6']);
  assert.ok(independentProjectTaskById['portfolio-support-6'].ordered);
  for(const task of independentProjectTasks){assert.ok(task.prompt.length>65&&task.deliverable.length>45,task.id+' needs business requirements and testable output contract');}
  for(const project of projects){assert.equal(project.taskIds.length,4);for(const id of project.taskIds)assert.ok(taskById[id],project.id+' references an unknown task');}
@@ -145,6 +150,19 @@ test('Every SQL answer executes on original and adversarial PostgreSQL fixtures'
   await base.exec(SUPPORT_SEED_SQL);
   await alt.exec(SUPPORT_SEED_SQL);
   await alt.exec(SUPPORT_ALTERNATE_SQL);
+  await base.exec(INVENTORY_SEED_SQL);
+  await alt.exec(INVENTORY_SEED_SQL);
+  await alt.exec(INVENTORY_ALTERNATE_SQL);
+  const inventoryCounts=await base.query('SELECT (SELECT COUNT(*) FROM inventory.locations) AS locations,(SELECT COUNT(*) FROM inventory.products) AS products,(SELECT COUNT(*) FROM inventory.opening_stock) AS opening,(SELECT COUNT(*) FROM inventory.movements) AS movements,(SELECT COUNT(*) FROM inventory.stocktakes) AS stocktakes');
+  assert.deepEqual(Object.values(inventoryCounts.rows[0]).map(Number),[3,4,9,15,12],'Warehouse case must use a separate five-table schema and stock ledger');
+  const alternateInventory=await alt.query('SELECT (SELECT COUNT(*) FROM inventory.locations) AS locations,(SELECT COUNT(*) FROM inventory.products) AS products,(SELECT COUNT(*) FROM inventory.opening_stock) AS opening,(SELECT COUNT(*) FROM inventory.movements) AS movements,(SELECT COUNT(*) FROM inventory.stocktakes) AS stocktakes');
+  assert.deepEqual(Object.values(alternateInventory.rows[0]).map(Number),[4,5,12,21,18],'Adversarial fixture adds a warehouse, SKU, negative stock, late postings and recounts');
+  const cut=await base.query("SELECT SUM(delta) AS delta FROM inventory.movements WHERE location_id=1 AND product_id=101 AND moved_at<TIMESTAMP '2026-08-10 12:00'");
+  assert.equal(Number(cut.rows[0].delta),-3,'Movements exactly at snapshot instant must not count');
+  const audit=await queryReadOnly(base,independentProjectTaskById['portfolio-inventory-3'].sql);
+  assert.ok(audit.rows.some(row=>Number(row.location_id)===1&&Number(row.product_id)===102&&Number(row.difference)===-1),'Same-time recount must break ties by count_id');
+  const auditAlt=await queryReadOnly(alt,independentProjectTaskById['portfolio-inventory-3'].sql);
+  assert.ok(auditAlt.rows.some(row=>Number(row.location_id)===4&&Number(row.product_id)===101),'Alternate case must detect a new stock discrepancy');
   const supportCounts=await base.query('SELECT (SELECT COUNT(*) FROM support.clients) AS clients,(SELECT COUNT(*) FROM support.agents) AS agents,(SELECT COUNT(*) FROM support.tickets) AS tickets,(SELECT COUNT(*) FROM support.ticket_events) AS events');
   assert.deepEqual(Object.values(supportCounts.rows[0]).map(Number),[6,5,16,38],'Initial project is an independent, grounded business dataset');
   const altSupportCounts=await alt.query('SELECT (SELECT COUNT(*) FROM support.clients) AS clients,(SELECT COUNT(*) FROM support.agents) AS agents,(SELECT COUNT(*) FROM support.tickets) AS tickets,(SELECT COUNT(*) FROM support.ticket_events) AS events');
@@ -208,6 +226,12 @@ test('Every SQL answer executes on original and adversarial PostgreSQL fixtures'
       assert.equal((await gradeSQL(task,variant.sql,base,alt)).ok,true,skill.id+' variant '+variant.title);
     }
   }
+  const flawedInventory=await gradeSQL(independentProjectTaskById['portfolio-inventory-1'],
+    'SELECT l.location_id,p.product_id,COALESCE(o.quantity,0)+COALESCE(SUM(m.delta),0) AS book_qty FROM inventory.locations l CROSS JOIN inventory.products p LEFT JOIN inventory.opening_stock o ON o.location_id=l.location_id AND o.product_id=p.product_id LEFT JOIN inventory.movements m ON m.location_id=l.location_id AND m.product_id=p.product_id GROUP BY l.location_id,p.product_id,o.quantity',base,alt);
+  assert.equal(flawedInventory.ok,false,'Inventory ledger must reject including postings after the cutoff');
+  const missingZero=await gradeSQL(independentProjectTaskById['portfolio-inventory-1'],
+    'SELECT o.location_id,o.product_id,o.quantity+COALESCE(SUM(m.delta),0) AS book_qty FROM inventory.opening_stock o LEFT JOIN inventory.movements m ON m.location_id=o.location_id AND m.product_id=o.product_id AND m.moved_at<TIMESTAMP \'2026-08-10 12:00\' GROUP BY o.location_id,o.product_id,o.quantity',base,alt);
+  assert.equal(missingZero.ok,false,'Inventory ledger must preserve SKU-location pairs without an opening row');
   const brittle=await gradeSQL(independentProjectTaskById['portfolio-support-1'],
     'SELECT a.agent_id,a.agent_name,COUNT(t.ticket_id) AS tickets_count FROM support.agents a JOIN support.tickets t ON t.agent_id=a.agent_id GROUP BY a.agent_id,a.agent_name',base,alt);
   assert.equal(brittle.ok,false,'Project must reject a plausible but invalid INNER JOIN that drops agents without tickets');
