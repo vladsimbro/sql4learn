@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0d1730">
+  <meta name="description" content="SQL4Learn — интерактивная академия SQL для аналитиков. Реальный PostgreSQL, самостоятельная практика, разбор ошибок и контрольные работы.">
+  <title>SQL4Learn — учись думать данными</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+</head>
+<body>
+  <div class="shell" id="shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#/home" aria-label="SQL4Learn — главная">
+        <span class="brand-icon"><span>_</span><b>4</b></span><span class="brand-words">sql<span>4</span>learn<small>DATA SKILLS STUDIO</small></span>
+      </a>
+      <div class="sidebar-section">ПРОСТРАНСТВО</div>
+      <nav class="primary-nav" aria-label="Основная навигация">
+        <a href="#/home" data-page="home"><span class="nav-ico">⌂</span>Главная</a>
+        <a href="#/course" data-page="course"><span class="nav-ico">▤</span>Учебный маршрут</a>
+        <a href="#/practice" data-page="practice"><span class="nav-ico">⌘</span>Практика</a>
+        <a href="#/review" data-page="review"><span class="nav-ico">◈</span>Мои навыки</a>
+      </nav>
+      <div class="sidebar-section secondary-section">ИНСТРУМЕНТЫ</div>
+      <nav class="primary-nav" aria-label="Инструменты">
+        <a href="#/projects" data-page="projects"><span class="nav-ico">▦</span>Проекты</a>
+        <a href="#/playground" data-page="playground"><span class="nav-ico">⌨</span>SQL-песочница</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="sidebar-progress">
+          <div class="side-progress-title"><span>Твой маршрут</span><strong id="side-progress-percent">0%</strong></div>
+          <div class="progress-line"><span id="side-progress-line"></span></div>
+          <p id="side-progress-caption">Первый запрос уже близко</p>
+        </div>
+        <div class="mini-profile"><span class="avatar">S</span><div><b>Самостоятельный курс</b><small>Прогресс в этом браузере</small></div></div>
+      </div>
+    </aside>
+    <div class="main-shell">
+      <header class="topbar">
+        <button id="menu-toggle" class="mobile-menu" aria-label="Открыть меню" aria-controls="sidebar" aria-expanded="false">☰</button>
+        <div class="top-breadcrumb"><span>ACADEMY</span><span class="crumb-slash">/</span><strong id="current-page">Главная</strong></div>
+        <div class="top-actions">
+          <div class="engine-status" id="engine-status" role="status" aria-live="polite"><i></i><span>Запуск PostgreSQL</span></div>
+          <button id="theme-toggle" class="top-icon-button" title="Сменить тему" aria-label="Сменить тему">◐</button>
+          <button id="export-button" class="top-icon-button" title="Экспортировать прогресс" aria-label="Экспортировать прогресс">⇩</button>
+          <label class="top-icon-button import-label" title="Импортировать прогресс" aria-label="Импортировать прогресс">⇧<input id="import-file" type="file" accept=".json,application/json" hidden></label>
+        </div>
+      </header>
+      <main id="app" class="app-content" tabindex="-1"><div class="boot"><span class="boot-spinner"></span><h1>Собираем рабочее пространство</h1><p>Теория доступна сразу, PostgreSQL запускается отдельно.</p></div></main>
+      <footer class="site-footer"><span>SQL4Learn · Учись думать данными</span><span>Оригинальный курс · PostgreSQL в браузере</span></footer>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
