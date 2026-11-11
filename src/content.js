@@ -1,3 +1,4 @@
+import {curriculumAdditions} from './curriculum-expansion.js';
 // Original curriculum for SQL4Learn. Every visible exercise has an executable reference query.
 // Never claim that planned modules are already available.
 const T=(id,title,prompt,sql,ordered=false)=>({id,title,prompt,sql,ordered});
@@ -388,6 +389,16 @@ export const modules=[
 
 ];
 
+// Preserve published IDs and progress: insert new lessons between existing lessons.
+for(const item of curriculumAdditions){
+ const module=modules.find(m=>m.id===item.module);
+ if(!module)throw new Error('Unknown curriculum module: '+item.module);
+ const before=item.after.startsWith('__before:');
+ const anchor=before?item.after.slice('__before:'.length):item.after;
+ const index=module.lessons.findIndex(lesson=>lesson.id===anchor);
+ if(index<0)throw new Error('Curriculum insertion anchor not found: '+item.id+' after '+item.after);
+ module.lessons.splice(index+(before?0:1),0,item.lesson);
+}
 export const lessons=modules.flatMap(module=>module.lessons.map((lesson,index)=>({...lesson,moduleId:module.id,moduleTitle:module.title,moduleIndex:modules.indexOf(module),lessonIndex:index})));
 export const tasks=lessons.flatMap(lesson=>lesson.tasks.map(task=>({...task,lessonId:lesson.id,moduleId:lesson.moduleId})));
 export const lessonById=Object.fromEntries(lessons.map(lesson=>[lesson.id,lesson]));
