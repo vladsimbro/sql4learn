@@ -184,7 +184,7 @@ export function renderReview(state){
 export function renderProjects(state){
  return header('ПРОЕКТЫ / РЕАЛЬНЫЕ КЕЙСЫ','Аналитическая мастерская','Настоящий самостоятельный кейс на незнакомых данных — отдельно от двух тренировочных историй, собранных из заданий курса.')+
  `<div class="independent-project-highlight card">
-   <div class="independent-project-copy"><p class="section-eyebrow">НОВЫЙ САМОСТОЯТЕЛЬНЫЙ ПРОЕКТ · ОТДЕЛЬНАЯ БАЗА</p>
+   <div class="independent-project-copy"><p class="section-eyebrow">НОВЫЙ САМОСТОЯТЕЛЬНЫЙ ПРОЕКТ · ОТДЕЛЬНАЯ СХЕМА</p>
    <h2>Support Ops · Аудит службы поддержки</h2>
    <p>Новая предметная область, которой не было в уроках: компании, операторы, заявки и история событий. Шесть независимых бизнес-отчётов и аналитическая записка. Никаких готовых алгоритмов.</p>
    <div class="project-feature-meta">${pill(independentProjects[0].tasks.filter(t=>done(state,t.id)).length+'/6 SQL-отчётов','teal')}${pill('PostgreSQL · схема support','neutral')}${pill('2 набора данных','neutral')}</div>
