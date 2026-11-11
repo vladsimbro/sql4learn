@@ -1,20 +1,33 @@
 import {lessons,tasks} from './content.js';
+import {supplementaryLessonPractice} from './curriculum-practice.js';
 import {assessmentTasks} from './assessments.js';
 import {clinicTasks} from './clinic.js';
 import {independentProjects,independentProjectTasks} from './portfolio.js';
 import {reviewSkills} from './review-bank.js';
 export const STORAGE_KEY='sql4learn-progress-v1';
-export function initialProgress(){return {version:1,completed:[],quiz:{},read:[],drafts:{},notes:{},projectNotes:{},review:{},theme:'light',lastRoute:'#/home'};}
+export function initialProgress(){return {version:1,curriculumVersion:2,legacyMastered:[],completed:[],quiz:{},read:[],drafts:{},notes:{},projectNotes:{},review:{},theme:'light',lastRoute:'#/home'};}
 const ids=new Set([...tasks,...assessmentTasks,...clinicTasks,...independentProjectTasks].map(item=>item.id)),lessonIds=new Set(lessons.map(lesson=>lesson.id)),projectIds=new Set(independentProjects.map(project=>project.id)),reviewIds=new Set(reviewSkills.map(skill=>skill.id)),draftIds=new Set([...ids,...reviewIds]);
+const optionalPracticeIds=new Set(supplementaryLessonPractice.map(entry=>entry.task.id));
 const record=obj=>obj&&typeof obj==='object'&&!Array.isArray(obj)?obj:{};
 const safeRecord=(input,allowed,keyLimit=10000)=>Object.fromEntries(Object.entries(record(input)).filter(([k,v])=>allowed.has(k)&&typeof v==='string'&&v.length<=keyLimit));
 export function normalizeProgress(value){
   const x=record(value);
   if(x.version!==undefined&&x.version!==1)throw new Error('Неподдерживаемая версия сохранения.');
+  const completed=[...new Set((Array.isArray(x.completed)?x.completed:[]).filter(id=>ids.has(id)))];
+  const quiz=Object.fromEntries(Object.entries(record(x.quiz)).filter(([key,val])=>lessonIds.has(key)&&Number.isInteger(val)&&val>=0&&val<=9));
+  // Old progress completed before extra exercises were added must not regress.
+  // New learners (curriculumVersion:2) must solve the updated lesson in full.
+  const historical=x.curriculumVersion===2?[]:lessons.filter(lesson=>{
+    const originalTasks=lesson.tasks.filter(task=>!optionalPracticeIds.has(task.id));
+    return originalTasks.length>0&&originalTasks.every(task=>completed.includes(task.id))&&quiz[lesson.id]===lesson.quiz.correct;
+  }).map(lesson=>lesson.id);
+  const legacyMastered=[...new Set([...(Array.isArray(x.legacyMastered)?x.legacyMastered:[]),...historical].filter(id=>lessonIds.has(id)))];
   return {
     version:1,
-    completed:[...new Set((Array.isArray(x.completed)?x.completed:[]).filter(id=>ids.has(id)))],
-    quiz:Object.fromEntries(Object.entries(record(x.quiz)).filter(([key,val])=>lessonIds.has(key)&&Number.isInteger(val)&&val>=0&&val<=9)),
+    curriculumVersion:2,
+    legacyMastered,
+    completed,
+    quiz,
     read:[...new Set((Array.isArray(x.read)?x.read:[]).filter(id=>lessonIds.has(id)))],
     drafts:safeRecord(x.drafts,draftIds),
     notes:safeRecord(x.notes,lessonIds,4000),
@@ -48,6 +61,7 @@ export function importProgress(text){
  return normalizeProgress(data.progress);
 }
 export const mastery=(progress,lesson)=>({
+ grandfathered:Array.isArray(progress.legacyMastered)&&progress.legacyMastered.includes(lesson.id),
  read:progress.read.includes(lesson.id),
  quiz:progress.quiz[lesson.id]===lesson.quiz.correct,
  total:lesson.tasks.length,
