@@ -244,6 +244,14 @@ try{
  await page.locator('#sidebar [data-page="course"]').click();
  await page.locator('.module-card').first().waitFor();
  assert.equal(await page.locator('.module-card').count(),9);
+ // Migrated progress should preserve an old mastered lesson even after its practice expands.
+ await page.evaluate(()=>localStorage.setItem('sql4learn-progress-v1',JSON.stringify({version:1,completed:['start-4','start-5'],quiz:{'explore-data':1}})));
+ await page.reload({waitUntil:'domcontentloaded'});
+ await page.locator('#engine-status.ready').waitFor({timeout:120000});
+ await clickHash('#/module/start');
+ assert.ok(await page.locator('a[href="#/lesson/explore-data"]').evaluate(el=>el.classList.contains('done')),'Old mastery must not be invalidated by a new optional exercise');
+ await clickHash('#/lesson/explore-data');
+ assert.match(await page.locator('.side-card').first().textContent(),/Зачёт старой версии сохранён/,'Explain grandfathered mastery alongside new tasks');
  assert.deepEqual(errors,[],'No runtime JavaScript exceptions');
  console.log('Browser verification passed: live PostgreSQL, correct/incorrect answers, exam integrity, persistence, read-only SQL, theme, mobile navigation.');
 }finally{
