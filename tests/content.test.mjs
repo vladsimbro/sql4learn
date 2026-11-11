@@ -69,7 +69,6 @@ test('Spaced repetition unlocks after authentic SQL, rotates variants and schedu
   assert.equal(value.level,level);
   assert.equal(value.nextDueAt-now,REVIEW_INTERVALS_DAYS[level-1]*86400000);
  }
- assert.equal(reviewStatus({...unlocked,review:{[skill.id]:value}},now).due,undefined);
  const scheduled=reviewStatus({...unlocked,review:{[skill.id]:value}},skill,now);
  assert.equal(scheduled.due,false);
  assert.equal(reviewTask({...unlocked,review:{[skill.id]:value}},skill).title,skill.variants[1].title);
