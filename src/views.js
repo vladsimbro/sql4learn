@@ -7,6 +7,7 @@ import {SUPPORT_SCHEMA} from './project-data.js';
 import {independentProjects,independentProjectById} from './portfolio.js';
 import {reviewSkills,reviewSkillById,reviewStatus,reviewTask} from './review-bank.js';
 import {mastery} from './progress.js';
+import {getLessonGuide,modulePedagogy} from './lesson-guides.js';
 
 export const esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;");
 const done=(state,id)=>state.progress.completed.includes(id);
@@ -47,10 +48,13 @@ export function renderHome(state){
   </section></div>`;
 }
 export function renderCourse(state){
- return header('КУРСЫ / ОСНОВНОЙ МАРШРУТ','SQL для аналитики','От первого SELECT до оконных функций. Только реализованные, работающие занятия — недостроенные темы честно отмечены отдельно.')+
- `<div class="module-grid">${modules.map((m,i)=>{const p=skill(state,m);return `<section class="card module-card">
+ return header('КУРСЫ / ОСНОВНОЙ МАРШРУТ','SQL для аналитики','От первого SELECT до корректных бизнес-метрик. Темы идут по зависимости знаний: необходимые конструкции объясняются раньше практики с ними.')+
+ `<section class="card curriculum-sequence"><p class="section-eyebrow">ПОЧЕМУ ИМЕННО ТАКАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ</p>
+ <div class="curriculum-sequence-grid">${modules.map((m,i)=>`<a href="#/module/${m.id}" class="curriculum-sequence-step"><span>${String(i+1).padStart(2,'0')}</span><strong>${esc(m.title)}</strong><small>${esc(modulePedagogy[m.id]?.outcome||m.subtitle)}</small></a>`).join('')}</div>
+ <p class="small muted">Модули открыты для свободного просмотра. Но чтобы действительно освоить тему, пройди предыдущие объяснения, реши SQL самостоятельно и вернись к контрольной на сочетание навыков.</p>
+ </section><div class="module-grid">${modules.map((m,i)=>{const p=skill(state,m);return `<section class="card module-card">
     <div class="module-top"><span class="module-icon">${esc(m.icon)}</span>${pill(i===0?'Старт':'Модуль '+(i+1),i===0?'teal':'neutral')}</div>
-    <h2>${esc(m.title)}</h2><p>${esc(m.subtitle)}</p>
+    <h2>${esc(m.title)}</h2><p>${esc(m.subtitle)}</p><p class="module-why"><b>Зачем этот этап:</b> ${esc(modulePedagogy[m.id]?.why||"")}</p>
     <div class="progress-track"><span style="width:${p.percent}%"></span></div>
     <div class="module-card-footer"><span>${m.lessons.length} урока · ${p.total} задач</span><strong>${p.passed}/${p.total}</strong></div>
     ${button(p.passed?'Продолжить модуль':'Открыть модуль',`#/module/${m.id}`)}
@@ -68,7 +72,39 @@ export function renderModule(state,id){
  ${exam?`<div class="subtle-line"></div><div class="between"><div><strong>${esc(exam.title)}</strong><p class="small muted">${esc(exam.description)}</p></div>${button('К контрольной',`#/exam/${exam.id}`,true)}</div>`:''}
  </section>`;
 }
-function objective(l){return `<div class="learning-objective"><b>После урока:</b> объясни идею «${esc(l.title)}» и самостоятельно реши задачи, не повторяя текст примера.</div>`;}
+function objective(l,state){
+ const guide=getLessonGuide(l.id);
+ if(!guide)return '';
+ const prereqs=guide.requires.map(id=>{
+  const prerequisite=lessonById[id];
+  return prerequisite?`<a href="#/lesson/${prerequisite.id}" class="lesson-prerequisite ${lessonDone(state,prerequisite)?'ready':''}">${lessonDone(state,prerequisite)?'✓':'○'} ${esc(prerequisite.title)}</a>`:'';
+ }).join('');
+ return `<div class="lesson-goal">
+  <span class="section-eyebrow">ЧТО ТЫ ДОЛЖЕН УМЕТЬ ПОСЛЕ ЭТОГО УРОКА</span>
+  <p>${esc(guide.goal)}</p>
+  ${prereqs?`<div class="lesson-prerequisites"><strong>Полезно вспомнить до начала</strong><div>${prereqs}</div></div>`:'<span class="small muted">Начинаем с нуля: предварительных знаний SQL не требуется.</span>'}
+ </div>`;
+}
+function predictionGuide(l,state){
+ const guide=getLessonGuide(l.id),result=state.exampleResult?.lessonId===l.id?state.exampleResult:null;
+ if(!guide)return '';
+ const forecast=result?.forecast;
+ const verified=result?.query&&Number.isInteger(forecast);
+ const actual=result?.query?.rows?.length;
+ return `<div class="lesson-prediction">
+  <p class="section-eyebrow">ПРОГНОЗ ДО ЗАПУСКА SQL</p>
+  <p>${esc(guide.predict)}</p>
+  <label for="example-prediction">Сколько строк ожидаешь в результате? <span class="muted">(необязательно)</span></label>
+  <input id="example-prediction" type="number" min="0" max="1000000" step="1" inputmode="numeric" placeholder="Например, 1" value="${Number.isInteger(forecast)?forecast:''}" aria-describedby="prediction-hint">
+  <div id="prediction-hint" class="small muted">Сначала подумай, потом запусти пример и сверь предположение с настоящим PostgreSQL.</div>
+  ${verified?`<div class="prediction-result ${forecast===actual?'correct':'review'}">${forecast===actual?'Прогноз числа строк подтвердился.':'Прогноз: '+forecast+' строк. Фактически: '+actual+'. Найди этап SQL, который изменил количество строк.'}</div>`:''}
+ </div>`;
+}
+function misconceptionGuide(l){
+ const guide=getLessonGuide(l.id);
+ return guide?`<div class="lesson-mistake"><span class="section-eyebrow">ТИПИЧНАЯ ЛОГИЧЕСКАЯ ОШИБКА</span><p>${esc(guide.pitfall)}</p></div>
+ <div class="lesson-self-check"><span class="section-eyebrow">ПРОВЕРЬ СЕБЯ</span><p>${esc(guide.check)}</p></div>`:'';
+}
 function quiz(state,l){
  const selection=state.progress.quiz[l.id],hasAnswer=Number.isInteger(selection);
  return `<section class="card lesson-section"><p class="section-eyebrow">ПРОВЕРКА ПОНИМАНИЯ</p><h2>${esc(l.quiz.question)}</h2>
@@ -130,15 +166,15 @@ export function renderLesson(state,id){
  <div class="workspace"><div class="workspace-main">
  <div class="lesson-heading"><div><p class="section-eyebrow">УРОК ${String(l.lessonIndex+1).padStart(2,'0')} / ${m.lessons.length} · ${esc(m.title)}</p><h1>${esc(l.title)}</h1><p>${esc(l.lead)}</p></div>${pill('SQL · PostgreSQL')}</div>
  <div class="lesson-tools"><button class="tab active" data-scroll="lesson-theory">Объяснение</button><button class="tab" data-scroll="lesson-quiz">Понимание</button><button class="tab" data-scroll="task-editor">Практика</button></div>
- <section class="card lesson-section" id="lesson-theory">${objective(l)}<h2>Разберём по шагам</h2>
+ <section class="card lesson-section" id="lesson-theory">${objective(l,state)}<h2>Разберём по шагам</h2>
  ${l.theory.map(p=>`<p>${esc(p)}</p>`).join('')}
  <div class="subtle-line"></div><p class="section-eyebrow">ПРИМЕР ЗАПРОСА</p>
- <p class="small muted">Прежде чем запускать пример, предположи: какие столбцы появятся, сколько строк получится и что означает каждая строка результата.</p>
+ ${predictionGuide(l,state)}
  <pre class="sql-code">${esc(l.example)}</pre>
  <div class="task-actions"><button class="btn" data-action="run-example" data-example-id="${esc(l.id)}" ${!state.engineReady?'disabled':''}>Выполнить и проверить предположение</button></div>
  <div id="lesson-example-result" aria-live="polite">${state.exampleResult?.lessonId===l.id?(state.exampleResult.error?`<div class="feedback error"><strong>Ошибка выполнения примера</strong>${esc(state.exampleResult.error)}</div>`:renderQueryTable(state.exampleResult.query)):''}</div>
  <p class="small muted">Логический путь от исходных данных к результату</p>${flowChart(m.id)}
- <p><strong>Почему это важно.</strong> ${esc(l.insight)}</p></section>
+ <p><strong>Почему это важно.</strong> ${esc(l.insight)}</p>${misconceptionGuide(l)}</section>
  <div id="lesson-quiz">${quiz(state,l)}</div>
  <div class="lesson-tools">${l.tasks.map((task,i)=>`<button class="tab ${task.id===t.id?'active':''}" data-task-tab="${task.id}">${done(state,task.id)?'✓ ':''}Задача ${i+1}</button>`).join('')}</div>
  ${taskEditor(state,t)}
