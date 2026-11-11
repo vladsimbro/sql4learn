@@ -9,7 +9,9 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: sql4learn-pages
+  # Pull requests only validate SQL; they must not queue behind a slow Pages deployment.
+  # Production pushes retain the original deployment mutex.
+  group: ${{ github.event_name == 'pull_request' && format('sql4learn-pr-{0}', github.head_ref) || 'sql4learn-pages' }}
   cancel-in-progress: false
 jobs:
   validate:
