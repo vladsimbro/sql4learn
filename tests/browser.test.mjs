@@ -133,6 +133,13 @@ try{
  await page.locator('#task-result td').waitFor({state:'visible'});
  assert.equal((await page.locator('#task-result td').first().textContent()).trim(),'18','Read-only safeguard must preserve data');
  await clickHash('#/xray');
+ await page.locator('.xray-scene[data-xray-scenario="logical-order"]').click();
+ assert.equal(await page.locator('.xray-step').count(),6,'Logical SQL explanation includes six distinct executable stages');
+ await page.locator('.xray-step[data-xray-step="logical-order:5"]').click();
+ await page.locator('[data-action="xray-run"]').click();
+ await page.locator('#xray-result tbody tr').first().waitFor({state:'visible',timeout:30000});
+ assert.ok((await page.locator('#xray-result tbody tr').count())<=3,'LIMIT must constrain the final grouped result');
+ await page.locator('.xray-scene[data-xray-scenario="join-fanout"]').click();
  await page.locator('.xray-step[data-xray-step="join-fanout:1"]').click();
  await page.locator('[data-action="xray-run"]').click();
  await page.locator('#xray-result tbody tr').first().waitFor({state:'visible',timeout:30000});
