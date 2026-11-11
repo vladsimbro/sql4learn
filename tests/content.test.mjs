@@ -18,10 +18,10 @@ import {lessonWalkthroughs,lessonVisuals} from '../src/lesson-walkthroughs.js';
 const all=[...tasks,...assessmentTasks,...clinicTasks,...independentProjectTasks];
 test('Only real finished lessons are offered, with unique skill and task IDs',()=>{
  assert.equal(modules.length,9);
- assert.equal(lessons.length,58);
- assert.equal(tasks.length,175);
+ assert.equal(lessons.length,63);
+ assert.equal(tasks.length,190);
  assert.equal(assessments.length,6);
- for(const id of ['text-normalize','text-extract','type-cast','numeric-expr','safe-ratios','keys-relations','cross-join','self-join','set-union','set-compare','not-exists-null','window-lead','window-moving','window-first-last'])assert.ok(lessonById[id],'Missing core SQL subject: '+id);
+ for(const id of ['text-normalize','text-extract','type-cast','numeric-expr','safe-ratios','keys-relations','cross-join','self-join','set-union','set-compare','not-exists-null','window-lead','window-moving','window-first-last','string-agg','correlated-scalar','window-ntile','stat-median','rollup-totals'])assert.ok(lessonById[id],'Missing core SQL subject: '+id);
  assert.ok(lessons.findIndex(l=>l.id==='keys-relations')<lessons.findIndex(l=>l.id==='inner'),'Teach PK/FK before JOIN');
  assert.ok(lessons.findIndex(l=>l.id==='type-cast')<lessons.findIndex(l=>l.id==='date-types'),'Teach type conversion before date casts');
  assert.ok(lessons.findIndex(l=>l.id==='set-union')<lessons.findIndex(l=>l.id==='subquery'),'Teach set operations before correlated subqueries');
