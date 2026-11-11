@@ -112,10 +112,10 @@ function renderWalkthrough(l){
  if(!steps.length)return '';
  const stageNames=['Сначала — исходные данные','Затем — действие SQL','Наконец — проверь результат'];
  const grid=(table)=>`<div class="walkthrough-table"><strong>${esc(table.label)}</strong><div class="table-scroll"><table><thead><tr>${table.columns.map(c=>`<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${table.rows.map(row=>`<tr>${row.map(cell=>`<td>${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
- return `<section class="card lesson-section lesson-walkthrough" id="lesson-walkthrough"><p class="section-eyebrow">ЛОГИКА БЕЗ ЗУБРЁЖКИ</p><h2>Разберём на маленьком примере</h2>
+ return `<div class="lesson-walkthrough" id="lesson-walkthrough"><p class="section-eyebrow">ЛОГИКА БЕЗ ЗУБРЁЖКИ</p><h2>Разберём на маленьком примере</h2>
  <p>Пройди эти шаги мысленно, а затем сравни с результатом настоящего запроса ниже. Здесь важнее понять, почему меняются строки, чем запомнить команду.</p>
  <div class="walkthrough-steps">${steps.map((step,i)=>`<article class="walkthrough-step"><div class="walkthrough-step-header"><span>${i+1}</span><strong>${esc(stageNames[i])}</strong></div><p>${esc(step)}</p></article>`).join('')}</div>
- ${visual?`<div class="walkthrough-visual"><h3>${esc(visual.title)}</h3><div class="walkthrough-tables">${grid(visual.before)}<span class="walkthrough-arrow" aria-hidden="true">→</span>${grid(visual.after)}</div><p class="walkthrough-insight">${esc(visual.insight)}</p></div>`:''}</section>`;
+ ${visual?`<div class="walkthrough-visual"><h3>${esc(visual.title)}</h3><div class="walkthrough-tables">${grid(visual.before)}<span class="walkthrough-arrow" aria-hidden="true">→</span>${grid(visual.after)}</div><p class="walkthrough-insight">${esc(visual.insight)}</p></div>`:''}</div>`;
 }
 function quiz(state,l){
  const selection=state.progress.quiz[l.id],hasAnswer=Number.isInteger(selection);
@@ -134,7 +134,7 @@ function taskEditor(state,task,exam=false,withHelp=false){
   <textarea class="sql-editor" id="sql-editor" spellcheck="false" autocomplete="off" autocapitalize="off" data-draft="${esc(task.id)}" aria-label="SQL-редактор">${esc(note)}</textarea>
   <div class="editor-shortcuts"><span>Ctrl / Cmd + Enter — проверить</span><span>SQL · read only</span></div></div>
   <div class="task-actions"><button class="btn primary" data-action="check" data-task-id="${esc(task.id)}" ${!state.engineReady?'disabled':''}>Проверить SQL</button><button class="btn" data-action="run" data-task-id="${esc(task.id)}" ${!state.engineReady?'disabled':''}>Выполнить</button>${exam?'':`${withHelp?'':`<button class="btn" data-action="hint" data-task-id="${esc(task.id)}">Подсказка</button>`}<button class="btn" data-action="solution" data-task-id="${esc(task.id)}">Разобрать решение</button>`}</div>
-  ${withHelp?`<div class="lesson-hints"><strong>Если застрял — открой помощь по одному шагу</strong><details><summary>Подсказка 1 · с чего начать</summary><p>${esc(getLessonGuide(task.lessonId)?.goal||'Определи, что означает одна строка будущего результата.')}</p></details><details><summary>Подсказка 2 · какую ошибку проверить</summary><p>${esc(getLessonGuide(task.lessonId)?.pitfall||'Проверь смысл строк и условия выборки.')}</p></details><details><summary>Подсказка 3 · проверь себя перед отправкой</summary><p>${esc(getLessonGuide(task.lessonId)?.check||'Проверь ожидаемые строки, имена и порядок результата.')}</p></details></div>`:''}
+  ${withHelp?`<div class="lesson-hints"><strong>Если застрял — открой помощь по одному шагу</strong><details><summary>Подсказка 1 · с чего начать</summary><p>${esc(getLessonGuide(task.lessonId||state.route?.id)?.goal||'Определи, что означает одна строка будущего результата.')}</p></details><details><summary>Подсказка 2 · какую ошибку проверить</summary><p>${esc(getLessonGuide(task.lessonId||state.route?.id)?.pitfall||'Проверь смысл строк и условия выборки.')}</p></details><details><summary>Подсказка 3 · проверь себя перед отправкой</summary><p>${esc(getLessonGuide(task.lessonId||state.route?.id)?.check||'Проверь ожидаемые строки, имена и порядок результата.')}</p></details></div>`:''}
   <div id="task-feedback">${result?renderFeedback(result):''}</div><div id="task-result">${result?.query?renderQueryTable(result.query):''}</div>
  </section>`;
 }
