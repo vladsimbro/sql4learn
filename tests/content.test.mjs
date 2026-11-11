@@ -170,6 +170,13 @@ test('Progress is scoped to authored IDs and backups cannot import arbitrary sta
  assert.equal(importProgress(exportProgress(source)).theme,'dark');
  assert.throws(()=>importProgress('{"product":"other","format":1,"progress":{}}'));
  assert.equal(mastery(progress,lessonById['first-query']).completed,1);
+ const oldMastered=normalizeProgress({version:1,completed:['start-4','start-5'],quiz:{'explore-data':1}});
+ assert.ok(oldMastered.legacyMastered.includes('explore-data'),'Completing the old two-task lesson must survive new extra practice');
+ assert.equal(mastery(oldMastered,lessonById['explore-data']).grandfathered,true);
+ assert.deepEqual(importProgress(exportProgress(oldMastered)).legacyMastered,oldMastered.legacyMastered,'Legacy mastery must survive backup and restore');
+ const newLearner=normalizeProgress({version:1,curriculumVersion:2,completed:['start-4','start-5'],quiz:{'explore-data':1}});
+ assert.equal(newLearner.legacyMastered.includes('explore-data'),false,'New students must finish newly added practice');
+ assert.equal(initialProgress().curriculumVersion,2);
  assert.equal(initialProgress().completed.length,0);
 });
 test('Every SQL answer executes on original and adversarial PostgreSQL fixtures',async()=>{
