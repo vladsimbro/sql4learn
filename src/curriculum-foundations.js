@@ -161,8 +161,8 @@ export const foundationAdditions=[
         {
           "id": "types-3",
           "title": "Подпись даты регистрации",
-          "prompt": "Для текстового экспорта преобразуй дату регистрации клиента в строку. Покажи номер клиента и registration_text.",
-          "sql": "SELECT customer_id,registered_at::text AS registration_text FROM customers;",
+          "prompt": "Для интеграции с внешней системой передай сумму заказа в копейках (умножь на 100) целым значением bigint. Верни номер заказа и amount_kopecks.",
+          "sql": "SELECT order_id,(amount*100)::bigint AS amount_kopecks FROM orders;",
           "ordered": false
         }
       ],
@@ -248,7 +248,7 @@ export const foundationAdditions=[
       "theory": [
         "У любого процента есть числитель и знаменатель. Сначала реши, какие события считаются успехом, а какие образуют весь подходящий набор. Например, доля доставок — количество доставленных заказов, делённое на число всех заказов. Нельзя незаметно поменять знаменатель фильтром WHERE.",
         "NULLIF(denominator,0) заменяет нулевой знаменатель на NULL, чтобы деление не завершилось ошибкой. NULL здесь означает, что показатель не определён, а не что он равен нулю. COALESCE можно применить позже, только если бизнес договорился, как отображать отсутствие базы.",
-        "Для процентов используй 100.0 и явно указывай точность ROUND. При группировке отдельный магазин может не иметь заказов: LEFT JOIN и COUNT(o.order_id) дадут 0, а NULLIF корректно защитит знаменатель."
+        "Для процентов используй 100.0 и явно указывай точность ROUND. Если исходных строк нет, COUNT(*) равен нулю, а NULLIF защитит знаменатель. Позже, после изучения JOIN, ты научишься включать в отчёт и магазины без заказов."
       ],
       "example": "SELECT ROUND(100.0*COUNT(*) FILTER(WHERE status='delivered')\n / NULLIF(COUNT(*),0),2) AS delivered_pct\nFROM orders;",
       "quiz": {
@@ -272,8 +272,8 @@ export const foundationAdditions=[
         {
           "id": "ratio-2",
           "title": "Доля отмен по магазинам",
-          "prompt": "Для каждого магазина рассчитай процент отменённых заказов от всех его заказов с точностью до двух знаков. У пустого магазина доля неизвестна, не подменяй её нулём. Верни store_id и cancel_pct.",
-          "sql": "SELECT s.store_id,ROUND(100.0*COUNT(o.order_id) FILTER(WHERE o.status='cancelled')/NULLIF(COUNT(o.order_id),0),2) AS cancel_pct FROM stores s LEFT JOIN orders o ON o.store_id=s.store_id GROUP BY s.store_id;",
+          "prompt": "Для каждого магазина, у которого есть заказы, рассчитай процент отменённых заказов от всех его заказов с точностью до двух знаков. Верни store_id и cancel_pct.",
+          "sql": "SELECT store_id,ROUND(100.0*COUNT(*) FILTER(WHERE status='cancelled')/NULLIF(COUNT(*),0),2) AS cancel_pct FROM orders GROUP BY store_id;",
           "ordered": false
         },
         {
