@@ -115,7 +115,7 @@ export const advancedAdditions=[
       "goal": "Находить общие и отсутствующие строки в двух результирующих множествах.",
       "predict": "Какие магазины останутся после stores EXCEPT delivered_store_ids?",
       "pitfall": "EXCEPT не симметричен: A EXCEPT B и B EXCEPT A означают разное.",
-      "check": "Когда использовать INTERSECT, а когда UNION?"
+      "check": "Объясни, когда использовать INTERSECT для общего множества, а когда UNION для объединения."
     }
   },
   {
