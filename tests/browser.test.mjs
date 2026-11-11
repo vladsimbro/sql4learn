@@ -51,7 +51,7 @@ try{
  await page.locator('#task-result td').waitFor({state:'visible'});
  assert.equal((await page.locator('#task-result td').first().textContent()).trim(),'18','Read-only safeguard must preserve data');
  await clickHash('#/xray');
- await page.locator('[data-xray-step="join-fanout:1"]').click();
+ await page.locator('.xray-step[data-xray-step="join-fanout:1"]').click();
  await page.locator('[data-action="xray-run"]').click();
  await page.locator('#xray-result tbody tr').first().waitFor({state:'visible',timeout:30000});
  assert.equal(await page.locator('#xray-result tbody tr').count(),2,'Joining two order items must multiply the order into two rows');
