@@ -1,4 +1,5 @@
 import {curriculumAdditions} from './curriculum-expansion.js';
+import {supplementaryLessonPractice} from './curriculum-practice.js';
 // Original curriculum for SQL4Learn. Every visible exercise has an executable reference query.
 // Never claim that planned modules are already available.
 const T=(id,title,prompt,sql,ordered=false)=>({id,title,prompt,sql,ordered});
@@ -398,6 +399,12 @@ for(const item of curriculumAdditions){
  const index=module.lessons.findIndex(lesson=>lesson.id===anchor);
  if(index<0)throw new Error('Curriculum insertion anchor not found: '+item.id+' after '+item.after);
  module.lessons.splice(index+(before?0:1),0,item.lesson);
+}
+// Supplement short original lessons with independent, progressively harder applications.
+for(const entry of supplementaryLessonPractice){
+ const lesson=modules.flatMap(m=>m.lessons).find(l=>l.id===entry.lessonId);
+ if(!lesson)throw new Error('Unknown practice target: '+entry.lessonId);
+ lesson.tasks.push(entry.task);
 }
 export const lessons=modules.flatMap(module=>module.lessons.map((lesson,index)=>({...lesson,moduleId:module.id,moduleTitle:module.title,moduleIndex:modules.indexOf(module),lessonIndex:index})));
 export const tasks=lessons.flatMap(lesson=>lesson.tasks.map(task=>({...task,lessonId:lesson.id,moduleId:lesson.moduleId})));
