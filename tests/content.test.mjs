@@ -11,19 +11,22 @@ import {independentProjects,independentProjectTasks,independentProjectTaskById} 
 import {reviewSkills,reviewStatus,reviewTask,advanceReview,reviewUnlocked,REVIEW_INTERVALS_DAYS} from '../src/review-bank.js';
 import {splitSQL,ensureSelect,queryReadOnly,compareResults,gradeSQL} from '../src/sql.js';
 import {initialProgress,normalizeProgress,exportProgress,importProgress,mastery} from '../src/progress.js';
+import {lessonGuides,modulePedagogy} from '../src/lesson-guides.js';
 
 const all=[...tasks,...assessmentTasks,...clinicTasks,...independentProjectTasks];
 test('Only real finished lessons are offered, with unique skill and task IDs',()=>{
  assert.equal(modules.length,9);
- assert.equal(lessons.length,41);
- assert.equal(tasks.length,109);
+ assert.equal(lessons.length,44);
+ assert.equal(tasks.length,119);
  assert.equal(assessments.length,6);
  assert.equal(assessmentTasks.length,14);
+ assert.deepEqual(assessments.map(a=>a.after),['filter','joins','dates','windows','audit','product'],'Cumulative exams must match the taught curriculum sequence');
  assert.equal(clinicTasks.length,13);
- assert.equal(xrayScenarios.length,7);
- assert.equal(xrayScenarios.flatMap(x=>x.steps).length,27);
+ assert.equal(xrayScenarios.length,8);
+ assert.equal(xrayScenarios.flatMap(x=>x.steps).length,33);
  assert.equal(new Set(lessons.map(x=>x.id)).size,lessons.length);
  assert.equal(new Set(all.map(x=>x.id)).size,all.length);
+ assert.ok(xrayScenarios.some(x=>x.id==='logical-order'&&x.steps.length===6),'SQL logical order must have a live multi-stage data-flow demonstration');
  assert.ok(upcomingModules.length>=3);
  assert.equal(projects.length,2);
  assert.equal(independentProjects.length,1,'Release includes a genuinely independent project rather than relabelled lesson tasks');
@@ -50,8 +53,26 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
  assert.ok(taskById['date-15']&&lessonById['date-calendar']);
  assert.ok(taskById['product-18']&&lessonById['product-cohorts']);
  assert.ok(taskById['audit-18']&&lessonById['audit-full-join']);
- assert.equal(modules[modules.length-1].id,'audit','Advanced data quality must come after all prerequisites');
+ assert.deepEqual(modules.map(m=>m.id),['start','filter','aggregate','joins','dates','cte','windows','audit','product'],'Module order must flow from basic SQL through validated data quality to product metrics');
+ assert.ok(lessonById['limit-top']&&lessonById['case-basic']&&lessonById['logical-order'],'Missing fundamental prerequisites must be taught explicitly');
+ assert.ok(taskById['start-13']&&taskById['case-3']&&taskById['logic-3']&&taskById['filter-13'],'New early and cumulative tasks must be independently graded');
+ assert.equal(taskById['filter-11'].lessonId,'date-types','Time bounds must not be a practice task before DATE/TIMESTAMP explanation');
+ for(const id of ['join-5','join-6'])assert.doesNotMatch(taskById[id].sql,/\bNOT\s+EXISTS\b/i,'An anti-join must use previously learned LEFT JOIN rather than untaught subquery');
+ assert.ok(modules.findIndex(m=>m.id==='audit')<modules.findIndex(m=>m.id==='product'),'Data integrity and JOIN cardinality must precede product analytics');
+ assert.ok(lessons.findIndex(l=>l.id==='logical-order')>lessons.findIndex(l=>l.id==='fanout'),'SQL logical order should follow required filtering and JOIN topics');
  assert.ok(modules.findIndex(m=>m.id==='product')>modules.findIndex(m=>m.id==='windows'),'Product cohort analytics must follow windows and CTEs');
+ assert.equal(Object.keys(lessonGuides).length,lessons.length,'A learning contract is required for every lesson');
+ assert.equal(Object.keys(modulePedagogy).length,modules.length,'Every module must explain why it follows the last');
+ const index=Object.fromEntries(lessons.map((lesson,i)=>[lesson.id,i]));
+ for(const lesson of lessons){
+   const guide=lessonGuides[lesson.id];
+   assert.ok(guide,lesson.id+' missing its lesson guide');
+   for(const field of ['goal','predict','pitfall','check'])assert.ok(typeof guide[field]==='string'&&guide[field].length>=45,lesson.id+' has incomplete '+field);
+   assert.ok(Array.isArray(guide.requires)&&new Set(guide.requires).size===guide.requires.length,lesson.id+' must define unique prerequisites');
+   for(const prereq of guide.requires)assert.ok(index[prereq]!==undefined&&index[prereq]<index[lesson.id],lesson.id+' refers to a topic not yet taught: '+prereq);
+ }
+ assert.equal(new Set(Object.values(lessonGuides).map(g=>g.predict)).size,lessons.length,'Predictions must differ across subjects');
+ assert.equal(new Set(Object.values(lessonGuides).map(g=>g.pitfall)).size,lessons.length,'Typical errors must be subject-specific rather than generic boilerplate');
  const moduleIndex=modules.findIndex(module=>module.id==='dates');
  assert.ok(moduleIndex>modules.findIndex(module=>module.id==='joins')&&moduleIndex<modules.findIndex(module=>module.id==='cte'),'Date training must follow joins but precede multistage CTEs');
 });

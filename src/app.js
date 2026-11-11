@@ -119,6 +119,8 @@ async function runLessonExample(id){
  if(!state.engineReady||!state.db){toast('PostgreSQL ещё запускается.');return;}
  const lesson=lessonById[id];
  if(!lesson||state.route?.page!=='lesson'||state.route.id!==id)return;
+ const predictionRaw=document.querySelector('#example-prediction')?.value?.trim()||'';
+ const forecast=/^\d{1,7}$/.test(predictionRaw)&&Number(predictionRaw)<=1000000?Number(predictionRaw):null;
  const button=document.querySelector('[data-action="run-example"]');
  if(button)button.disabled=true;
  const host=document.querySelector('#lesson-example-result');
@@ -126,7 +128,7 @@ async function runLessonExample(id){
  try{
   const query=await queryReadOnly(state.db,lesson.example);
   if(state.route?.page!=='lesson'||state.route.id!==id)return;
-  state.exampleResult={lessonId:id,query};
+  state.exampleResult={lessonId:id,query,forecast};
  }catch(error){
   if(state.route?.page!=='lesson'||state.route.id!==id)return;
   state.exampleResult={lessonId:id,error:String(error.message||error)};
