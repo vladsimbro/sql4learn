@@ -2,6 +2,7 @@ import {modules,lessons,tasks,lessonById,taskById,moduleById} from './content.js
 import {assessments,assessmentTaskById,assessmentById} from './assessments.js';
 import {SEED_SQL,ALTERNATE_SQL} from './data.js';
 import {SUPPORT_SEED_SQL,SUPPORT_ALTERNATE_SQL,SUPPORT_SCHEMA} from './project-data.js';
+import {INVENTORY_SEED_SQL,INVENTORY_ALTERNATE_SQL,INVENTORY_SCHEMA} from './inventory-data.js';
 import {independentProjectById,independentProjectTaskById} from './portfolio.js';
 import {reviewSkills,reviewSkillById,reviewStatus,reviewTask,advanceReview} from './review-bank.js';
 import {clinicTaskById} from './clinic.js';
@@ -86,8 +87,9 @@ async function initDatabase(){
   const database=await PGlite.create();
   await database.exec(SEED_SQL);
   await database.exec(SUPPORT_SEED_SQL);
+  await database.exec(INVENTORY_SEED_SQL);
   state.db=database;state.engineReady=true;engineStatus(true,'PostgreSQL готов');
-  state.secondaryPromise=(async()=>{const extra=await PGlite.create();await extra.exec(SEED_SQL);await extra.exec(ALTERNATE_SQL);await extra.exec(SUPPORT_SEED_SQL);await extra.exec(SUPPORT_ALTERNATE_SQL);state.secondaryDB=extra;return extra;})();
+  state.secondaryPromise=(async()=>{const extra=await PGlite.create();await extra.exec(SEED_SQL);await extra.exec(ALTERNATE_SQL);await extra.exec(SUPPORT_SEED_SQL);await extra.exec(SUPPORT_ALTERNATE_SQL);await extra.exec(INVENTORY_SEED_SQL);await extra.exec(INVENTORY_ALTERNATE_SQL);state.secondaryDB=extra;return extra;})();
   state.secondaryPromise.catch(error=>{console.error('Контрольная база не запустилась',error);});
   render({keepScroll:true});
  }catch(error){
@@ -106,7 +108,9 @@ function updateResults(){
  if(output)output.innerHTML=state.result?.query?renderQueryTable(state.result.query):'';
 }
 async function previewSchemaTable(tableName){
- if(!Object.hasOwn(SUPPORT_SCHEMA,tableName)||state.route?.page!=='project')return;
+ const project=state.route?.page==='project'?independentProjectById[state.route.id]:null;
+ const schema=project?.schemaPrefix==='support.'?SUPPORT_SCHEMA:project?.schemaPrefix==='inventory.'?INVENTORY_SCHEMA:null;
+ if(!schema||!Object.hasOwn(schema,tableName))return;
  if(!state.engineReady||!state.db){toast('PostgreSQL ещё запускается.');return;}
  try{
   const query=await queryReadOnly(state.db,'SELECT * FROM '+tableName+' LIMIT 8');

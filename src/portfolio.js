@@ -32,7 +32,72 @@ export const independentProjects=[
     sql:"SELECT ticket_id,ROUND(EXTRACT(EPOCH FROM (TIMESTAMP '2026-06-10 12:00'-opened_at))/3600,1) AS hours_open FROM support.tickets WHERE priority='high' AND current_status IN ('open','in_progress') AND opened_at<TIMESTAMP '2026-06-09 12:00' ORDER BY hours_open DESC,ticket_id",ordered:true}
   ]
  }
-];
+ ,{
+  "id": "inventory-audit",
+  "title": "Inventory Control · Расхождения складского учёта",
+  "subtitle": "Второй самостоятельный проект: движение товара и инвентаризация",
+  "industry": "Товарный склад",
+  "level": "Продвинутый SQL · самостоятельное расследование",
+  "problem": "Финансовый отдел не доверяет остаткам: часть товаров уходит в минус, инвентаризации противоречат системному учёту, а пополнение может опираться на устаревшие числа. Нужно восстановить остатки из проводок и доказать, откуда появляются расхождения.",
+  "context": "У тебя пять новых таблиц в схеме inventory: склады, номенклатура, начальные остатки, движения и физические пересчёты. В аналитике одна строка движения не равна единице товара. Исходные таблицы не менять. Восстанови состояние на фиксированный момент, а затем сверь его с инвентаризацией.",
+  "businessRules": [
+    "Остатки inventory.opening_stock заданы на 1 августа 2026, 00:00. Отсутствующая пара склад–товар имеет начальный остаток 0, а не NULL.",
+    "Единая точка отчёта — 10 августа 2026, 12:00. Учитывай проводки начиная с 1 августа включительно и строго до точки отчёта; движения ровно в 12:00 и позже не входят.",
+    "inventory.movements.delta — изменение количества в штуках: положительное поступление, отрицательное выбытие. Несколько строк по одному товару не должны размножать начальные остатки.",
+    "Физическую проверку отражает последний пересчёт по паре склад–товар строго до точки отчёта; при равном времени последним считается больший count_id. Не проверенные позиции нельзя приравнивать к нулевому физическому остатку.",
+    "Порог пополнения products.reorder_point задан для суммарного остатка товара по всем складам. Нуждаются в пополнении позиции строго ниже порога.",
+    "Отклонение инвентаризации = физическое количество минус учётное; в сводке по складам абсолютные отклонения суммируются по позициям, не взаимозачитывая плюсы и минусы."
+  ],
+  "schemaPrefix": "inventory.",
+  "reviewPrompt": "Опиши, какие SKU нужно пополнить, где есть отрицательные учётные остатки и почему итог инвентаризации не равен нулю. Докажи хотя бы одной сверкой, что повторные пересчёты и несколько движений не размножили результат. Какие правила нужно уточнить перед управленческим решением?",
+  "tasks": [
+    {
+      "id": "portfolio-inventory-1",
+      "title": "Восстанови учётный остаток",
+      "prompt": "Финансовый директор запросил полный реестр остатков всех товаров во всех складах на момент отчёта. Покажи и пустые сочетания склад–товар: они должны иметь нулевой остаток, если движение и начальные значения отсутствуют. Сохрани и отрицательные остатки для расследования.",
+      "deliverable": "location_id, product_id, book_qty — одна строка на каждую пару склад–товар.",
+      "sql": "WITH book AS (SELECT l.location_id,p.product_id,COALESCE(o.quantity,0)+COALESCE(m.qty,0) AS book_qty FROM inventory.locations l CROSS JOIN inventory.products p LEFT JOIN inventory.opening_stock o ON o.location_id=l.location_id AND o.product_id=p.product_id LEFT JOIN (SELECT location_id,product_id,SUM(delta) AS qty FROM inventory.movements WHERE moved_at>=TIMESTAMP '2026-08-01 00:00' AND moved_at<TIMESTAMP '2026-08-10 12:00' GROUP BY location_id,product_id) m ON m.location_id=l.location_id AND m.product_id=p.product_id) SELECT location_id,product_id,book_qty FROM book"
+    },
+    {
+      "id": "portfolio-inventory-2",
+      "title": "Позиции для пополнения",
+      "prompt": "Снабжению нужен список товаров, чьё суммарное учётное количество на всех складах строго меньше установленного порога пополнения на момент отчёта. Покажи товар, его артикул, реальное учётное количество и порог. Отсортируй сначала по меньшему остатку, при равенстве — по номеру товара.",
+      "deliverable": "product_id, sku, total_qty, reorder_point — отсортированный список.",
+      "sql": "WITH book AS (SELECT l.location_id,p.product_id,COALESCE(o.quantity,0)+COALESCE(m.qty,0) AS book_qty FROM inventory.locations l CROSS JOIN inventory.products p LEFT JOIN inventory.opening_stock o ON o.location_id=l.location_id AND o.product_id=p.product_id LEFT JOIN (SELECT location_id,product_id,SUM(delta) AS qty FROM inventory.movements WHERE moved_at>=TIMESTAMP '2026-08-01 00:00' AND moved_at<TIMESTAMP '2026-08-10 12:00' GROUP BY location_id,product_id) m ON m.location_id=l.location_id AND m.product_id=p.product_id) SELECT p.product_id,p.sku,SUM(b.book_qty) AS total_qty,p.reorder_point FROM inventory.products p JOIN book b ON b.product_id=p.product_id GROUP BY p.product_id,p.sku,p.reorder_point HAVING SUM(b.book_qty)<p.reorder_point ORDER BY total_qty,p.product_id",
+      "ordered": true
+    },
+    {
+      "id": "portfolio-inventory-3",
+      "title": "Расхождения с физическим пересчётом",
+      "prompt": "Аудиторы просят все позиции, где последний доступный физический пересчёт на момент отчёта расходится с учётным остатком. Старые повторные пересчёты не учитывай; позиции без пересчёта в итог нарушений не включай. Рассчитай знаковую разницу между фактом и учётом.",
+      "deliverable": "location_id, product_id, book_qty, physical_qty, difference — только позиции с расхождением.",
+      "sql": "WITH book AS (SELECT l.location_id,p.product_id,COALESCE(o.quantity,0)+COALESCE(m.qty,0) AS book_qty FROM inventory.locations l CROSS JOIN inventory.products p LEFT JOIN inventory.opening_stock o ON o.location_id=l.location_id AND o.product_id=p.product_id LEFT JOIN (SELECT location_id,product_id,SUM(delta) AS qty FROM inventory.movements WHERE moved_at>=TIMESTAMP '2026-08-01 00:00' AND moved_at<TIMESTAMP '2026-08-10 12:00' GROUP BY location_id,product_id) m ON m.location_id=l.location_id AND m.product_id=p.product_id), counted AS (SELECT location_id,product_id,physical_qty,ROW_NUMBER() OVER(PARTITION BY location_id,product_id ORDER BY counted_at DESC,count_id DESC) AS rn FROM inventory.stocktakes WHERE counted_at<TIMESTAMP '2026-08-10 12:00') SELECT b.location_id,b.product_id,b.book_qty,c.physical_qty,c.physical_qty-b.book_qty AS difference FROM book b JOIN counted c ON c.location_id=b.location_id AND c.product_id=b.product_id AND c.rn=1 WHERE c.physical_qty<>b.book_qty"
+    },
+    {
+      "id": "portfolio-inventory-4",
+      "title": "Оборот товара по складам",
+      "prompt": "Операционный директор хочет знать, сколько единиц каждого склада поступило и сколько выбыло за отчётный период. Поступления и выбытия покажи отдельными положительными числами. В отчёте должны остаться склады без единой проводки с нулевыми показателями.",
+      "deliverable": "location_id, location_name, received_units, issued_units — одна строка на склад.",
+      "sql": "SELECT l.location_id,l.location_name,COALESCE(SUM(m.delta) FILTER(WHERE m.delta>0),0) AS received_units,COALESCE(-SUM(m.delta) FILTER(WHERE m.delta<0),0) AS issued_units FROM inventory.locations l LEFT JOIN inventory.movements m ON m.location_id=l.location_id AND m.moved_at>=TIMESTAMP '2026-08-01 00:00' AND m.moved_at<TIMESTAMP '2026-08-10 12:00' GROUP BY l.location_id,l.location_name"
+    },
+    {
+      "id": "portfolio-inventory-5",
+      "title": "Товары без движений",
+      "prompt": "Команде контроля нужен полный перечень складских позиций, по которым за отчётный период не было ни одного движения. Учитывай все склады и все товары, даже если для сочетания никогда не заводили начальный остаток. Движения после точки отчёта не должны исключать позицию. Отсортируй по складу и товару.",
+      "deliverable": "location_id, product_id — по возрастанию обоих полей.",
+      "sql": "SELECT l.location_id,p.product_id FROM inventory.locations l CROSS JOIN inventory.products p WHERE NOT EXISTS(SELECT 1 FROM inventory.movements m WHERE m.location_id=l.location_id AND m.product_id=p.product_id AND m.moved_at>=TIMESTAMP '2026-08-01 00:00' AND m.moved_at<TIMESTAMP '2026-08-10 12:00') ORDER BY l.location_id,p.product_id",
+      "ordered": true
+    },
+    {
+      "id": "portfolio-inventory-6",
+      "title": "Итоговое заключение по складам",
+      "prompt": "Подготовь по каждому складу сводку инвентаризации: сколько разных позиций фактически проверили, сколько из них имеют расхождение и какова суммарная величина абсолютных расхождений в штуках. Повторные проверки одной позиции не должны создавать новые позиции. Даже склад без пересчётов должен остаться с нулями.",
+      "deliverable": "location_id, counted_positions, discrepant_positions, absolute_gap_units — одна строка на склад.",
+      "sql": "WITH book AS (SELECT l.location_id,p.product_id,COALESCE(o.quantity,0)+COALESCE(m.qty,0) AS book_qty FROM inventory.locations l CROSS JOIN inventory.products p LEFT JOIN inventory.opening_stock o ON o.location_id=l.location_id AND o.product_id=p.product_id LEFT JOIN (SELECT location_id,product_id,SUM(delta) AS qty FROM inventory.movements WHERE moved_at>=TIMESTAMP '2026-08-01 00:00' AND moved_at<TIMESTAMP '2026-08-10 12:00' GROUP BY location_id,product_id) m ON m.location_id=l.location_id AND m.product_id=p.product_id), counted AS (SELECT location_id,product_id,physical_qty,ROW_NUMBER() OVER(PARTITION BY location_id,product_id ORDER BY counted_at DESC,count_id DESC) AS rn FROM inventory.stocktakes WHERE counted_at<TIMESTAMP '2026-08-10 12:00'), checked AS (SELECT b.location_id,b.product_id,ABS(c.physical_qty-b.book_qty) AS gap FROM book b JOIN counted c ON c.location_id=b.location_id AND c.product_id=b.product_id AND c.rn=1) SELECT l.location_id,COUNT(c.product_id) AS counted_positions,COUNT(c.product_id) FILTER(WHERE c.gap>0) AS discrepant_positions,COALESCE(SUM(c.gap),0) AS absolute_gap_units FROM inventory.locations l LEFT JOIN checked c ON c.location_id=l.location_id GROUP BY l.location_id"
+    }
+  ]
+}
+]; 
 export const independentProjectById=Object.fromEntries(independentProjects.map(p=>[p.id,p]));
 export const independentProjectTasks=independentProjects.flatMap(p=>p.tasks.map(t=>({...t,projectId:p.id})));
 export const independentProjectTaskById=Object.fromEntries(independentProjectTasks.map(t=>[t.id,t]));

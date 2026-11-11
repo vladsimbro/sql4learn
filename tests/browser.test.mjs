@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
+import {independentProjectTaskById} from '../src/portfolio.js';
 
 const base=process.env.BASE_URL||'http://127.0.0.1:4173/';
 const browser=await chromium.launch({headless:true});
@@ -113,7 +114,7 @@ try{
  assert.equal(await page.locator('[data-exam-tab]').count(),3);
  await clickHash('#/projects');
  assert.equal(await page.locator('.project-hero').count(),2,'Two learning-case collections must remain available');
- assert.equal(await page.locator('.independent-project-highlight').count(),1,'A new independent data investigation must have a separate entry');
+ assert.equal(await page.locator('.independent-project-highlight').count(),2,'Two different independent investigations must appear as portfolio cards');
  await clickHash('#/project/support-ops');
  await page.locator('#project-brief').waitFor({state:'visible'});
  assert.equal(await page.locator('[data-project-task]').count(),6,'The self-directed project must contain six different deliverables');
@@ -140,6 +141,32 @@ try{
  assert.match(await page.locator('#project-notes').inputValue(),/операторов без заявок/,'Analyst notes must survive reload');
  await page.locator('[data-project-task="portfolio-support-2"]').click();
  assert.match(await page.locator('.learning-objective').textContent(),/first_reply_minutes/,'Project task tabs must switch business deliverables');
+ await clickHash('#/projects');
+ assert.match(await page.locator('.independent-project-highlight').nth(1).textContent(),/Inventory Control/,'Second business domain must have its own entry');
+ await clickHash('#/project/inventory-audit');
+ await page.locator('#project-brief').waitFor({state:'visible'});
+ assert.equal(await page.locator('[data-project-task]').count(),6,'Inventory investigation must have six independent deliverables');
+ assert.match(await page.locator('.schema-menu').textContent(),/inventory.stocktakes/,'Portfolio schema must switch to inventory, not leak support tables');
+ assert.equal(await page.locator('[data-schema="support.tickets"]').count(),0,'Inventory explorer should show only the active project schema');
+ await page.locator('[data-schema="inventory.stocktakes"]').click();
+ await page.locator('[data-action="preview-schema"]').click();
+ await page.locator('.workspace-right .result-box tbody tr').first().waitFor({state:'visible',timeout:30000});
+ assert.equal(await page.locator('.workspace-right .result-box tbody tr').count(),8,'Stocktakes must expose real PostgreSQL records');
+ await page.locator('#sql-editor').fill('SELECT location_id,product_id,quantity AS book_qty FROM inventory.opening_stock');
+ await page.locator('[data-action="check"]').click();
+ await page.locator('#task-feedback .error').waitFor({timeout:45000});
+ assert.ok(!(await localProgress()).completed.includes('portfolio-inventory-1'),'Missing zero-balance pairs cannot pass inventory ledger');
+ const inventorySQL=independentProjectTaskById['portfolio-inventory-1'].sql;
+ await page.locator('#sql-editor').fill(inventorySQL);
+ await page.locator('[data-action="check"]').click();
+ await page.locator('#task-feedback .success').waitFor({timeout:45000});
+ assert.ok((await localProgress()).completed.includes('portfolio-inventory-1'),'Warehouse ledger must be checked against both datasets');
+ await page.locator('#project-notes').fill('Инвентаризация показала расхождения; непроверенные пары не равны нулю. Проверил повторные пересчёты.');
+ assert.match((await localProgress()).projectNotes['inventory-audit'],/повторные пересчёты/);
+ await page.reload({waitUntil:'domcontentloaded'});
+ await page.locator('#engine-status.ready').waitFor({state:'visible',timeout:120000});
+ assert.equal(await page.locator('#sql-editor').inputValue(),inventorySQL,'Inventory SQL must persist after reload');
+ assert.match(await page.locator('#project-notes').inputValue(),/повторные пересчёты/,'New project notes must persist');
  await clickHash('#/lesson/audit-preaggregate');
  await page.locator('.lesson-heading h1').waitFor();
  assert.match(await page.locator('.lesson-heading h1').textContent(),/fan-out/,'Advanced joins topic should be accessible');
