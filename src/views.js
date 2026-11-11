@@ -3,6 +3,8 @@ import {assessments,assessmentById} from './assessments.js';
 import {xrayScenarios,xrayById} from './xray.js';
 import {clinicTasks,clinicTaskById} from './clinic.js';
 import {SCHEMA} from './data.js';
+import {SUPPORT_SCHEMA} from './project-data.js';
+import {independentProjects,independentProjectById} from './portfolio.js';
 import {mastery} from './progress.js';
 
 export const esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;");
@@ -107,12 +109,17 @@ function masteryPanel(state,l){const m=mastery(state.progress,l);return `<sectio
  <div class="skill-row"><strong>SQL</strong><div class="progress-track"><span style="width:${percentage(m.completed,m.total)}%"></span></div><small>${m.completed}/${m.total}</small></div></div>
  <p class="small muted">Отметка чтения сама по себе не подтверждает владение SQL.</p>
  <button class="btn small" data-action="read" data-lesson="${l.id}">${m.read?'✓ Материал прочитан':'Отметить прочитанным'}</button></section>`;}
-function schemaPanel(state){
- const selected=SCHEMA[state.schema]||SCHEMA.orders;
- return `<section class="card side-card"><h3>Учебная база / схема</h3>
- <div class="schema-menu">${Object.keys(SCHEMA).map(name=>`<button data-schema="${name}" class="${name===state.schema?'active':''}">${esc(name)}</button>`).join('')}</div>
- <table class="schema-table"><tbody>${selected.map(([name,type])=>`<tr><td>${esc(name)}</td><td>${esc(type)}</td></tr>`).join('')}</tbody></table>
- <p class="small muted" style="line-height:1.6;margin:13px 0 0">Видны настоящие таблицы PostgreSQL, доступные во всех упражнениях.</p></section>`;}
+function schemaPanel(state,scope=''){
+ const available=scope?SUPPORT_SCHEMA:SCHEMA;
+ const names=Object.keys(available);
+ const name=Object.hasOwn(available,state.schema)?state.schema:names[0];
+ const selected=available[name]||[];
+ const preview=state.previewTable?.name===name?state.previewTable.query:null;
+ return `<section class="card side-card"><h3>${scope?'Новая предметная область · support':'Учебная база / схема'}</h3>
+ <div class="schema-menu">${names.map(key=>`<button data-schema="${esc(key)}" class="${key===name?'active':''}">${esc(key)}</button>`).join('')}</div>
+ <table class="schema-table"><tbody>${selected.map(([column,type])=>`<tr><td>${esc(column)}</td><td>${esc(type)}</td></tr>`).join('')}</tbody></table>
+ ${scope?`<button class="btn small" data-action="preview-schema" data-table-name="${esc(name)}" ${!state.engineReady?'disabled':''} style="margin-top:12px">Посмотреть первые 8 строк</button>${preview?renderQueryTable(preview):''}<p class="small muted">Таблицы находятся в отдельной схеме PostgreSQL `support`. Исследуй состав данных перед решением.</p>`:`<p class="small muted" style="line-height:1.6;margin:13px 0 0">Видны настоящие таблицы PostgreSQL, доступные во всех упражнениях.</p>`}
+ </section>`;}
 function activeTask(state,l){return l.tasks.find(t=>t.id===state.activeTaskId)||l.tasks[0];}
 export function renderLesson(state,id){
  const l=lessonById[id];if(!l)return renderNotFound();
@@ -147,7 +154,7 @@ export function renderStandaloneTask(state,id){
 export function renderPractice(state){
  const filters=['all',...modules.map(m=>m.id)];
  const filtered=state.filter==='all'?tasks:tasks.filter(task=>task.moduleId===state.filter);
- const complete=state.progress.completed.length;
+ const complete=tasks.filter(t=>done(state,t.id)).length;
  return header('ПРАКТИКА / ЗАДАНИЯ','Пиши SQL самостоятельно','Каждое упражнение проверяется на двух наборах данных. Здесь нет заранее перечисленных команд и таблиц.')+
  `<section class="card panel"><div class="between"><strong>${complete} из ${tasks.length} задач решено</strong>${pill(percentage(complete,tasks.length)+'%','teal')}</div>
  <div class="progress-track" style="margin-top:13px"><span style="width:${percentage(complete,tasks.length)}%"></span></div></section>
@@ -175,8 +182,16 @@ export function renderReview(state){
  <div class="feedback info"><strong>Что означает «освоил»?</strong>Чтение, вопрос на понимание и правильный SQL — разные показатели. Контрольная нужна, чтобы проверить использование нескольких навыков вместе.</div></section></div>`;
 }
 export function renderProjects(state){
- return header('ПРОЕКТЫ / РЕАЛЬНЫЕ КЕЙСЫ','Аналитическая мастерская','Два разных бизнеса и два независимых набора таблиц. Кейсы объединяют навыки в логичную историю, но пока используют задания курса.')+
- `<div class="colgap">${projects.map((p,i)=>`
+ return header('ПРОЕКТЫ / РЕАЛЬНЫЕ КЕЙСЫ','Аналитическая мастерская','Настоящий самостоятельный кейс на незнакомых данных — отдельно от двух тренировочных историй, собранных из заданий курса.')+
+ \`<div class="independent-project-highlight card">
+   <div class="independent-project-copy"><p class="section-eyebrow">НОВЫЙ САМОСТОЯТЕЛЬНЫЙ ПРОЕКТ · ОТДЕЛЬНАЯ БАЗА</p>
+   <h2>Support Ops · Аудит службы поддержки</h2>
+   <p>Новая предметная область, которой не было в уроках: компании, операторы, заявки и история событий. Шесть независимых бизнес-отчётов и аналитическая записка. Никаких готовых алгоритмов.</p>
+   <div class="project-feature-meta">\${pill(independentProjects[0].tasks.filter(t=>done(state,t.id)).length+'/6 SQL-отчётов','teal')}\${pill('PostgreSQL · схема support','neutral')}\${pill('2 набора данных','neutral')}</div>
+   \${button('Открыть самостоятельный проект',\`#/project/\${independentProjects[0].id}\`,true)}</div>
+   <div class="independent-project-symbol" aria-hidden="true"><span>ANALYTICS</span><strong>SUPPORT<br>OPS_</strong><span>SQL PORTFOLIO</span></div>
+ </div><p class="section-eyebrow" style="margin:25px 0 15px">УЧЕБНЫЕ КЕЙСЫ ИЗ ПРОЙДЕННЫХ МОДУЛЕЙ</p>\`+
+  `<div class="colgap">${projects.map((p,i)=>`
   <section class="card project-hero"><div><p class="section-eyebrow">АНАЛИТИЧЕСКИЙ КЕЙС ${String(i+1).padStart(2,'0')}</p><h2>${esc(p.title)}</h2>
   <p>${esc(p.lead)}</p>
   ${pill(p.taskIds.filter(id=>done(state,id)).length+'/'+p.taskIds.length+' этапов пройдено','teal')}
@@ -189,6 +204,42 @@ export function renderProjects(state){
   </div></section>`).join('')}</div>
  <section class="card panel" style="margin-top:17px"><p class="small muted" style="line-height:1.8">Оба кейса сейчас объединяют реальные проверяемые задачи уже изученных модулей. Самостоятельные большие проекты с отдельной защитой расчётов и незнакомыми данными — отдельный следующий этап, не заявляем их готовыми заранее.</p></section>`;
 }
+
+export function renderIndependentProject(state,id){
+ const project=independentProjectById[id];if(!project)return renderNotFound();
+ const task=project.tasks.find(t=>t.id===state.activeTaskId)||project.tasks[0];
+ const passed=project.tasks.filter(t=>done(state,t.id)).length;
+ const note=state.progress.projectNotes?.[id]||'';
+ return `<a class="crumb-link" href="#/projects">← Вернуться к проектам</a>`+
+  header('АНАЛИТИЧЕСКАЯ МАСТЕРСКАЯ / НЕЗНАКОМАЯ БАЗА',project.title,project.subtitle,pill(passed+'/'+project.tasks.length+' отчётов','teal'))+
+  `<div class="workspace"><div class="workspace-main">
+   <section class="card panel" id="project-brief"><p class="section-eyebrow">ЗАКАЗЧИК И БИЗНЕС-ПРОБЛЕМА</p><h2 class="panel-title">Что нужно исследовать</h2>
+   <p class="project-paragraph">${esc(project.problem)}</p><p class="project-paragraph">${esc(project.context)}</p>
+   <div class="subtle-line"></div><h3>Условия и определения метрик</h3>
+   <ul class="project-rules">${project.businessRules.map(rule=>`<li>${esc(rule)}</li>`).join('')}</ul>
+   <div class="feedback info"><strong>Как проходить</strong>Изучи структуру и реальные строки таблиц в правой колонке. Выбирай порядок исследования самостоятельно. В проекте нет подсказок и готового решения до зачёта; SQL проверяется на другом наборе данных.</div>
+   </section>
+   <section class="card panel project-deliverables">
+    <p class="section-eyebrow">РЕЗУЛЬТАТЫ ИССЛЕДОВАНИЯ</p><h2 class="panel-title">Шесть связанных SQL-отчётов</h2>
+    <div class="project-task-tabs">${project.tasks.map((t,i)=>`<button data-project-task="${t.id}" class="tab ${t.id===task.id?'active':''}">${done(state,t.id)?'✓ ':''}Этап ${i+1}</button>`).join('')}</div>
+    <div class="learning-objective"><b>Контракт результата:</b> ${esc(task.deliverable)}</div>
+    <p class="small muted">Форма ответа нужна для воспроизводимого отчёта; способ решения ты выбираешь сам.</p>
+   </section>
+   ${taskEditor(state,task,true)}
+   <section class="card panel project-notes" id="project-review">
+    <p class="section-eyebrow">АНАЛИТИЧЕСКАЯ ЗАПИСКА</p><h2 class="panel-title">Что показали данные?</h2>
+    <p class="project-paragraph">${esc(project.reviewPrompt)}</p>
+    <label for="project-notes">Твои выводы и аргументы</label>
+    <textarea id="project-notes" data-project-id="${esc(id)}" maxlength="4000" rows="6" placeholder="Опиши ключевые показатели, проблемы SLA, возможные причины и ограничения выводов.">${esc(note)}</textarea>
+    <p class="small muted">Заметка сохраняется локально и включается в резервную копию. Она не оценивается автоматически; без профессиональной проверки нельзя считать защиту проекта пройденной.</p>
+    <div class="project-summary">${pill(passed===project.tasks.length?'Все SQL-отчёты проверены':passed+' из '+project.tasks.length+' SQL-отчётов',passed===project.tasks.length?'teal':'neutral')}
+      ${pill(note.trim().length>0?'Выводы записаны (без оценки)':'Выводы пока не записаны','neutral')}</div>
+   </section>
+  </div><aside class="workspace-right">${schemaPanel(state,project.schemaPrefix)}
+  <section class="card side-card"><h3>Что означает освоение</h3><p class="small muted" style="line-height:1.8">Зачёт SQL означает совпадение результатов на двух наборах данных. Качество бизнес-выводов без проверки эксперта автоматически не подтверждается.</p></section>
+  </aside></div>`;
+}
+
 export function renderPlayground(state){
  const output=state.result?.taskId==='playground'?state.result:null;
  return header('ИНСТРУМЕНТЫ / SQL-РЕДАКТОР','Свободная SQL-песочница','Выполняй безопасные запросы SELECT и WITH … SELECT на учебной базе PostgreSQL. Изменение таблиц запрещено.')+
@@ -245,6 +296,7 @@ export function renderPage(state,route){
  if(route.page==='exam')return {title:'Контрольная',html:renderExam(state,route.id)};
  if(route.page==='review')return {title:'Мои навыки',html:renderReview(state)};
  if(route.page==='projects')return {title:'Проекты',html:renderProjects(state)};
+ if(route.page==='project')return {title:independentProjectById[route.id]?.title||'Проект',html:renderIndependentProject(state,route.id)};
  if(route.page==='playground')return {title:'SQL-песочница',html:renderPlayground(state)};
  if(route.page==='xray')return {title:'SQL X-Ray',html:renderXray(state)};
  if(route.page==='clinic')return {title:'Клиника ошибок',html:renderClinic(state)};
