@@ -8,6 +8,7 @@ import {xrayScenarios} from '../src/xray.js';
 import {SEED_SQL,ALTERNATE_SQL,SCHEMA} from '../src/data.js';
 import {SUPPORT_SCHEMA,SUPPORT_SEED_SQL,SUPPORT_ALTERNATE_SQL} from '../src/project-data.js';
 import {independentProjects,independentProjectTasks,independentProjectTaskById} from '../src/portfolio.js';
+import {reviewSkills,reviewStatus,reviewTask,advanceReview,reviewUnlocked,REVIEW_INTERVALS_DAYS} from '../src/review-bank.js';
 import {splitSQL,ensureSelect,queryReadOnly,compareResults,gradeSQL} from '../src/sql.js';
 import {initialProgress,normalizeProgress,exportProgress,importProgress,mastery} from '../src/progress.js';
 
@@ -26,6 +27,10 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
  assert.ok(upcomingModules.length>=3);
  assert.equal(projects.length,2);
  assert.equal(independentProjects.length,1,'Release includes a genuinely independent project rather than relabelled lesson tasks');
+ assert.equal(reviewSkills.length,9);
+ assert.equal(reviewSkills.flatMap(x=>x.variants).length,27);
+ assert.equal(new Set(reviewSkills.map(x=>x.id)).size,9);
+ assert.equal(new Set(reviewSkills.flatMap(x=>x.variants.map(v=>v.prompt))).size,27,'Every repetition variant must use a different business framing');
  assert.equal(independentProjectTasks.length,6);
  assert.equal(Object.keys(SUPPORT_SCHEMA).length,4);
  assert.ok(independentProjectTaskById['portfolio-support-6'].ordered);
@@ -49,6 +54,29 @@ test('Only real finished lessons are offered, with unique skill and task IDs',()
  assert.ok(modules.findIndex(m=>m.id==='product')>modules.findIndex(m=>m.id==='windows'),'Product cohort analytics must follow windows and CTEs');
  const moduleIndex=modules.findIndex(module=>module.id==='dates');
  assert.ok(moduleIndex>modules.findIndex(module=>module.id==='joins')&&moduleIndex<modules.findIndex(module=>module.id==='cte'),'Date training must follow joins but precede multistage CTEs');
+});
+test('Spaced repetition unlocks after authentic SQL, rotates variants and schedules bounded intervals',()=>{
+ const now=Date.UTC(2026,10,11,12);
+ const skill=reviewSkills[0],base={completed:[],review:{}};
+ assert.equal(reviewUnlocked(base,skill),false);
+ assert.equal(reviewStatus(base,skill,now).due,false);
+ const unlocked={completed:[lessonById[skill.lessonId].tasks[0].id],review:{}};
+ assert.equal(reviewStatus(unlocked,skill,now).due,true);
+ assert.equal(reviewTask(unlocked,skill).title,skill.variants[0].title);
+ let value;
+ for(let level=1;level<=4;level++){
+  value=advanceReview(value,true,now);
+  assert.equal(value.level,level);
+  assert.equal(value.nextDueAt-now,REVIEW_INTERVALS_DAYS[level-1]*86400000);
+ }
+ assert.equal(reviewStatus({...unlocked,review:{[skill.id]:value}},now).due,undefined);
+ const scheduled=reviewStatus({...unlocked,review:{[skill.id]:value}},skill,now);
+ assert.equal(scheduled.due,false);
+ assert.equal(reviewTask({...unlocked,review:{[skill.id]:value}},skill).title,skill.variants[1].title);
+ const reset=advanceReview(value,false,now);
+ assert.equal(reset.level,0);
+ assert.equal(reset.misses,1);
+ assert.equal(reset.nextDueAt,now);
 });
 test('SQL statements are parsed without splitting comments and literals',()=>{
  assert.equal(splitSQL("SELECT ';' AS symbol;").length,1);
@@ -76,6 +104,10 @@ test('Progress is scoped to authored IDs and backups cannot import arbitrary sta
  assert.deepEqual(progress.read,['first-query']);
  assert.deepEqual(progress.drafts,{'start-1':'SELECT 1','portfolio-support-1':'SELECT 42'});
  assert.deepEqual(progress.projectNotes,{'support-ops':'SLA и распределение нагрузок проверены.'});
+ assert.deepEqual(progress.review,{});
+ const scheduled=normalizeProgress({review:{'recall-first':{level:3,nextDueAt:1770000000000,misses:2},bad:{level:999,nextDueAt:0}}});
+ assert.deepEqual(scheduled.review,{'recall-first':{level:3,nextDueAt:1770000000000,misses:2}});
+ assert.deepEqual(importProgress(exportProgress(scheduled)).review,scheduled.review);
  assert.deepEqual(importProgress(exportProgress(source)).projectNotes,progress.projectNotes);
  assert.deepEqual(normalizeProgress({version:1,completed:['start-1']}).projectNotes,{},'Older backup remains valid after new project notes are introduced');
  assert.equal(importProgress(exportProgress(source)).theme,'dark');
@@ -144,6 +176,16 @@ test('Every SQL answer executes on original and adversarial PostgreSQL fixtures'
   for(const clinic of clinicTasks){
     const broken=await gradeSQL(clinic,clinic.brokenSQL,base,alt);
     assert.equal(broken.ok,false,clinic.id+' broken query must actually be wrong');
+  }
+  for(const skill of reviewSkills){
+    for(const variant of skill.variants){
+      const task={...variant,id:skill.id};
+      const first=await queryReadOnly(base,variant.sql);
+      const other=await queryReadOnly(alt,variant.sql);
+      assert.ok(first.fields.length>0&&other.fields.length>0,skill.id+' retrieval variant must return SQL columns');
+      assert.ok(first.rows.length>0&&other.rows.length>0,skill.id+' retrieval variant must be answerable on both PostgreSQL datasets');
+      assert.equal((await gradeSQL(task,variant.sql,base,alt)).ok,true,skill.id+' variant '+variant.title);
+    }
   }
   const brittle=await gradeSQL(independentProjectTaskById['portfolio-support-1'],
     'SELECT a.agent_id,a.agent_name,COUNT(t.ticket_id) AS tickets_count FROM support.agents a JOIN support.tickets t ON t.agent_id=a.agent_id GROUP BY a.agent_id,a.agent_name',base,alt);
