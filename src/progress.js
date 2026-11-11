@@ -2,9 +2,10 @@ import {lessons,tasks} from './content.js';
 import {assessmentTasks} from './assessments.js';
 import {clinicTasks} from './clinic.js';
 import {independentProjects,independentProjectTasks} from './portfolio.js';
+import {reviewSkills} from './review-bank.js';
 export const STORAGE_KEY='sql4learn-progress-v1';
-export function initialProgress(){return {version:1,completed:[],quiz:{},read:[],drafts:{},notes:{},projectNotes:{},theme:'light',lastRoute:'#/home'};}
-const ids=new Set([...tasks,...assessmentTasks,...clinicTasks,...independentProjectTasks].map(item=>item.id)),lessonIds=new Set(lessons.map(lesson=>lesson.id)),projectIds=new Set(independentProjects.map(project=>project.id));
+export function initialProgress(){return {version:1,completed:[],quiz:{},read:[],drafts:{},notes:{},projectNotes:{},review:{},theme:'light',lastRoute:'#/home'};}
+const ids=new Set([...tasks,...assessmentTasks,...clinicTasks,...independentProjectTasks].map(item=>item.id)),lessonIds=new Set(lessons.map(lesson=>lesson.id)),projectIds=new Set(independentProjects.map(project=>project.id)),reviewIds=new Set(reviewSkills.map(skill=>skill.id)),draftIds=new Set([...ids,...reviewIds]);
 const record=obj=>obj&&typeof obj==='object'&&!Array.isArray(obj)?obj:{};
 const safeRecord=(input,allowed,keyLimit=10000)=>Object.fromEntries(Object.entries(record(input)).filter(([k,v])=>allowed.has(k)&&typeof v==='string'&&v.length<=keyLimit));
 export function normalizeProgress(value){
@@ -15,9 +16,14 @@ export function normalizeProgress(value){
     completed:[...new Set((Array.isArray(x.completed)?x.completed:[]).filter(id=>ids.has(id)))],
     quiz:Object.fromEntries(Object.entries(record(x.quiz)).filter(([key,val])=>lessonIds.has(key)&&Number.isInteger(val)&&val>=0&&val<=9)),
     read:[...new Set((Array.isArray(x.read)?x.read:[]).filter(id=>lessonIds.has(id)))],
-    drafts:safeRecord(x.drafts,ids),
+    drafts:safeRecord(x.drafts,draftIds),
     notes:safeRecord(x.notes,lessonIds,4000),
     projectNotes:safeRecord(x.projectNotes,projectIds,4000),
+    review:Object.fromEntries(Object.entries(record(x.review)).filter(([key,value])=>reviewIds.has(key)&&value&&typeof value==='object'&&!Array.isArray(value)).map(([key,value])=>[key,{
+      level:Number.isInteger(value.level)?Math.min(4,Math.max(0,value.level)):0,
+      nextDueAt:typeof value.nextDueAt==='number'&&Number.isFinite(value.nextDueAt)&&value.nextDueAt>=0?Math.min(value.nextDueAt,4102444800000):0,
+      misses:Number.isInteger(value.misses)?Math.min(100000,Math.max(0,value.misses)):0
+    }])),
     theme:x.theme==='dark'?'dark':'light',
     lastRoute:typeof x.lastRoute==='string'&&/^#\/[A-Za-z0-9/_-]+$/.test(x.lastRoute)?x.lastRoute:'#/home'
   };
