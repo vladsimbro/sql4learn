@@ -1,9 +1,10 @@
 import {lessons,tasks} from './content.js';
 import {assessmentTasks} from './assessments.js';
 import {clinicTasks} from './clinic.js';
+import {independentProjects,independentProjectTasks} from './portfolio.js';
 export const STORAGE_KEY='sql4learn-progress-v1';
-export function initialProgress(){return {version:1,completed:[],quiz:{},read:[],drafts:{},notes:{},theme:'light',lastRoute:'#/home'};}
-const ids=new Set([...tasks,...assessmentTasks,...clinicTasks].map(item=>item.id)),lessonIds=new Set(lessons.map(lesson=>lesson.id));
+export function initialProgress(){return {version:1,completed:[],quiz:{},read:[],drafts:{},notes:{},projectNotes:{},theme:'light',lastRoute:'#/home'};}
+const ids=new Set([...tasks,...assessmentTasks,...clinicTasks,...independentProjectTasks].map(item=>item.id)),lessonIds=new Set(lessons.map(lesson=>lesson.id)),projectIds=new Set(independentProjects.map(project=>project.id));
 const record=obj=>obj&&typeof obj==='object'&&!Array.isArray(obj)?obj:{};
 const safeRecord=(input,allowed,keyLimit=10000)=>Object.fromEntries(Object.entries(record(input)).filter(([k,v])=>allowed.has(k)&&typeof v==='string'&&v.length<=keyLimit));
 export function normalizeProgress(value){
@@ -16,6 +17,7 @@ export function normalizeProgress(value){
     read:[...new Set((Array.isArray(x.read)?x.read:[]).filter(id=>lessonIds.has(id)))],
     drafts:safeRecord(x.drafts,ids),
     notes:safeRecord(x.notes,lessonIds,4000),
+    projectNotes:safeRecord(x.projectNotes,projectIds,4000),
     theme:x.theme==='dark'?'dark':'light',
     lastRoute:typeof x.lastRoute==='string'&&/^#\/[A-Za-z0-9/_-]+$/.test(x.lastRoute)?x.lastRoute:'#/home'
   };
