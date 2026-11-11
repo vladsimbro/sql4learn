@@ -1,3 +1,4 @@
+import {modules} from './content.js';
 // Independent cumulative assessments; do not reuse exercises from lessons.
 export const assessments=[
  {id:'checkpoint-1',title:'Контрольная 01 · выборки и фильтрация',after:'filter',description:'Впервые собери несколько изученных конструкций в одном запросе.',skills:['SELECT','WHERE','IN','ORDER BY'],tasks:[
@@ -29,6 +30,8 @@ export const assessments=[
 
 
 ];
+// Keep cumulative exams after the material they actually examine, even when the course is restructured.
+assessments.sort((a,b)=>modules.findIndex(m=>m.id===a.after)-modules.findIndex(m=>m.id===b.after));
 export const assessmentTasks=assessments.flatMap(assessment=>assessment.tasks.map(task=>({...task,assessmentId:assessment.id})));
 export const assessmentById=Object.fromEntries(assessments.map(assessment=>[assessment.id,assessment]));
 export const assessmentTaskById=Object.fromEntries(assessmentTasks.map(task=>[task.id,task]));
