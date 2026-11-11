@@ -1,3 +1,4 @@
+import {curriculumGuides} from './curriculum-expansion.js';
 // SQL4Learn learning contracts: explicit prerequisites, observable outcomes and misconception checks for every lesson.
 // Content is original; no competitor's text is reproduced.
 export const lessonGuides={
@@ -416,6 +417,7 @@ export const lessonGuides={
     "check": "Назови ограничения данных, которые могут искажать бизнес-метрики сессий."
   }
 };
+Object.assign(lessonGuides,curriculumGuides);
 export const getLessonGuide=(id)=>lessonGuides[id]||null;
 
 // The explicit conceptual progression shown on the course overview.
