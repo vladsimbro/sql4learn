@@ -93,6 +93,9 @@ try{
  assert.match(await page.locator('.lesson-list').textContent(),/SELF JOIN/,'Core JOIN variants must be available inside learning route');
  await clickHash('#/module/windows');
  assert.match(await page.locator('.lesson-list').textContent(),/LAST_VALUE/,'Extended window lessons must be part of curriculum');
+ assert.match(await page.locator('.lesson-list').textContent(),/Медиана/,'Median and percentiles must follow ranked windows');
+ await clickHash('#/module/audit');
+ assert.match(await page.locator('.lesson-list').textContent(),/ROLLUP/,'Multilevel aggregation must follow audit fundamentals');
  await clickHash('#/course');
  await clickHash('#/lesson/group-by');
  assert.equal(await page.locator('.walkthrough-table').count(),2,'GROUP BY must have genuine before-after data tables');
@@ -230,7 +233,7 @@ try{
  await page.locator('#theme-toggle').click();
  assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
  await clickHash('#/practice');
- assert.equal(await page.locator('.exercise-card').count(),175);
+ assert.equal(await page.locator('.exercise-card').count(),190);
  await page.setViewportSize({width:390,height:844});
  await page.locator('#menu-toggle').click();
  assert.ok(await page.locator('#sidebar').evaluate(el=>el.classList.contains('open')),'Mobile navigation should open');
