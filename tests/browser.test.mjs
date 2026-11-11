@@ -82,6 +82,13 @@ try{
  assert.equal(await page.locator('.curriculum-sequence-step').count(),9,'Nine modules should form a visible, explained learning path');
  assert.match(await page.locator('.module-card').nth(7).textContent(),/Сложные JOIN/,'Teach reliability before product reports');
  assert.match(await page.locator('.module-card').nth(8).textContent(),/Продуктовая аналитика/);
+ await clickHash('#/module/filter');
+ assert.match(await page.locator('.lesson-list').textContent(),/Типы данных/,'Core SQL types must be taught inside the learning route');
+ await clickHash('#/module/joins');
+ assert.match(await page.locator('.lesson-list').textContent(),/SELF JOIN/,'Core JOIN variants must be available inside learning route');
+ await clickHash('#/module/windows');
+ assert.match(await page.locator('.lesson-list').textContent(),/LAST_VALUE/,'Extended window lessons must be part of curriculum');
+ await clickHash('#/course');
  await clickHash('#/lesson/limit-top');
  await page.locator('.lesson-heading h1').waitFor();
  assert.match(await page.locator('.lesson-heading h1').textContent(),/LIMIT/);
@@ -215,7 +222,7 @@ try{
  await page.locator('#theme-toggle').click();
  assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
  await clickHash('#/practice');
- assert.equal(await page.locator('.exercise-card').count(),119);
+ assert.equal(await page.locator('.exercise-card').count(),161);
  await page.setViewportSize({width:390,height:844});
  await page.locator('#menu-toggle').click();
  assert.ok(await page.locator('#sidebar').evaluate(el=>el.classList.contains('open')),'Mobile navigation should open');
