@@ -36,3 +36,11 @@
 Работа ведётся в `vladsimbro/sql4learn`, основная ветка main. Исходная версия восстановима по upstream SHA выше. Статус публикации текущего коммита проверяется в [Actions](https://github.com/vladsimbro/sql4learn/actions) и [release.json](https://vladsimbro.github.io/sql4learn/release.json); отсутствие успешного run нельзя интерпретировать как релиз.
 
 Следующий обязательный продуктовый блок: формализовать typed grading contracts и независимый Foundation checkpoint, затем разработать PostgreSQL лаборатории с реальной изоляцией. Детали/зависимости/критерии — ROADMAP.md и CURRICULUM.md. Количественный процент готовности не приводится: нет проверенной весовой модели полного академического продукта.
+
+## Подтверждённая публикация 0.11 и ограничение настроек Pages
+
+PR [#11](https://github.com/vladsimbro/sql4learn/pull/11) слит в main. Коммит кода `8707f9770e97bc0cc088c64b27beaadcedac8086`; [релизный workflow #43126356950](https://github.com/vladsimbro/sql4learn/actions/runs/43126356950) завершился success: validate, deploy, browser. Публичный release.json вернул этот SHA и версию 0.11.0. Обе браузерные серии выполнены после публикации, включая timeout/recovery, storage export и axe.
+
+В настройках репозитория отдельно обнаружен `build_type: legacy`, source main `/`. Он запускает системный `pages-build-deployment` (workflow414980466) параллельно нашему workflow и может публиковать исходники без vendor. В релизе лишний run43126356831 остановлен, затем успешно опубликован проверенный dist. Это не постоянное исправление настройки.
+
+Попытка PUT Pages `build_type=workflow` получила GitHub403 (Resource not accessible by integration); попытка отключить системный workflow —422 (Unable to disable this workflow). Владелец уведомлён: [Settings → Pages](https://github.com/vladsimbro/sql4learn/settings/pages), Build and deployment → Source → **GitHub Actions**. До подтверждения этого переключения риск следующего конкурирующего legacy-деплоя остаётся открытым. Это ограничение прав GitHub, а не отказ автоматического approval-review. Проверенный текущий выпуск доступен.

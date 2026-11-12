@@ -37,3 +37,11 @@ npm run test:browser
 ## Ограничения проверки
 
 Порядок job и локальная сборка проверяются в рабочем окружении. Успех нового GitHub Actions workflow и публикация считаются подтверждёнными только после реального запуска и проверки release.json. Постпубликационный тест сообщает о регрессии, но не откатывает сайт автоматически. Производительность доставки WASM при медленной мобильной сети требует отдельного замера. Внешняя загрузка необязательных шрифтов из исходного HTML рассматривается отдельно; она не нужна для запуска SQL.
+
+## Подтверждённая публикация 0.11 и ограничение настроек Pages
+
+PR [#11](https://github.com/vladsimbro/sql4learn/pull/11) слит в main. Коммит кода `8707f9770e97bc0cc088c64b27beaadcedac8086`; [релизный workflow #43126356950](https://github.com/vladsimbro/sql4learn/actions/runs/43126356950) завершился success: validate, deploy, browser. Публичный release.json вернул этот SHA и версию 0.11.0. Обе браузерные серии выполнены после публикации, включая timeout/recovery, storage export и axe.
+
+В настройках репозитория отдельно обнаружен `build_type: legacy`, source main `/`. Он запускает системный `pages-build-deployment` (workflow414980466) параллельно нашему workflow и может публиковать исходники без vendor. В релизе лишний run43126356831 остановлен, затем успешно опубликован проверенный dist. Это не постоянное исправление настройки.
+
+Попытка PUT Pages `build_type=workflow` получила GitHub403 (Resource not accessible by integration); попытка отключить системный workflow —422 (Unable to disable this workflow). Владелец уведомлён: [Settings → Pages](https://github.com/vladsimbro/sql4learn/settings/pages), Build and deployment → Source → **GitHub Actions**. До подтверждения этого переключения риск следующего конкурирующего legacy-деплоя остаётся открытым. Это ограничение прав GitHub, а не отказ автоматического approval-review. Проверенный текущий выпуск доступен.
