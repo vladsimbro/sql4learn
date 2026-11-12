@@ -6,11 +6,7 @@ on:
     branches: [main]
 permissions:
   contents: read
-  pages: write
-  id-token: write
 concurrency:
-  # Pull requests only validate SQL; they must not queue behind a slow Pages deployment.
-  # Production pushes retain the original deployment mutex.
   group: ${{ github.event_name == 'pull_request' && format('sql4learn-pr-{0}', github.head_ref) || 'sql4learn-pages' }}
   cancel-in-progress: false
 jobs:
@@ -21,32 +17,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund --no-package-lock
+          cache: npm
+      - name: Install the locked dependency tree
+        run: npm ci --no-audit --no-fund
       - name: Validate JavaScript modules
         run: |
-          for file in src/*.js tests/*.mjs; do node --check "$file"; done
-      - name: Execute every reference query on two PostgreSQL datasets
+          for file in src/*.js scripts/*.mjs tests/*.mjs; do node --check "$file"; done
+      - name: Execute SQL, grading and runtime tests
         run: npm test
-  browser-preview:
-    # Test the real curriculum UI before merging, without publishing a pull request.
-    needs: validate
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund --no-package-lock
+      - name: Build the exact static deployment artifact
+        run: npm run build
       - name: Install Chromium
-        run: npx playwright install chromium
-      - name: Test local browser, editor, SQL feedback and mobile route
+        run: npx playwright install --with-deps chromium
+      - name: Test the built site before publication
         env:
           BASE_URL: http://127.0.0.1:4173/
         run: |
-          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/sql4learn-preview.log 2>&1 &
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory dist >/tmp/sql4learn-preview.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
@@ -54,19 +41,23 @@ jobs:
             sleep 1
           done
           npm run test:browser
+      - name: Upload only the tested static artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
   deploy:
     needs: validate
     if: github.event_name == 'push'
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
       - id: deployment
         uses: actions/deploy-pages@v4
   browser:
@@ -78,10 +69,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund --no-package-lock
+          cache: npm
+      - name: Install the locked dependency tree
+        run: npm ci --no-audit --no-fund
       - name: Install Chromium
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify deployed source identity
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          curl --fail --silent --show-error "https://vladsimbro.github.io/sql4learn/release.json?commit=${EXPECTED_COMMIT}" -o /tmp/sql4learn-release.json
+          node --input-type=module -e "import fs from 'node:fs'; const release=JSON.parse(fs.readFileSync('/tmp/sql4learn-release.json')); if(release.commit!==process.env.EXPECTED_COMMIT) throw new Error('Published commit does not match tested code');"
       - name: Check published site, SQL editor, progress and mobile
         env:
           BASE_URL: https://vladsimbro.github.io/sql4learn/

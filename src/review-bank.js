@@ -51,6 +51,8 @@ export const reviewSkills=[
 ];
 export const reviewSkillById=Object.fromEntries(reviewSkills.map(skill=>[skill.id,skill]));
 export const REVIEW_INTERVALS_DAYS=[1,3,7,30];
+// The interval level saturates; completed rounds must keep rotating the exercise.
+const roundOf=snapshot=>Number.isSafeInteger(snapshot?.round)&&snapshot.round>=0?snapshot.round:(snapshot?.level||0);
 export function reviewUnlocked(progress,skill){
  const lesson=lessonById[skill.lessonId];
  return !!lesson&&lesson.tasks.some(task=>progress.completed.includes(task.id));
@@ -59,7 +61,7 @@ export function reviewStatus(progress,skill,now=Date.now()){
  const snapshot=progress.review?.[skill.id]||{level:0,nextDueAt:0,misses:0};
  const unlocked=reviewUnlocked(progress,skill);
  const due=unlocked&&snapshot.nextDueAt<=now;
- return {...snapshot,unlocked,due,variant:skill.variants[snapshot.level%skill.variants.length]};
+ return {...snapshot,unlocked,due,variant:skill.variants[roundOf(snapshot)%skill.variants.length]};
 }
 export function reviewTask(progress,skill){
  const variant=reviewStatus(progress,skill).variant;
@@ -68,5 +70,6 @@ export function reviewTask(progress,skill){
 export function advanceReview(current,passed,now=Date.now()){
  const level=passed?Math.min(4,(current?.level||0)+1):0;
  const delay=passed?REVIEW_INTERVALS_DAYS[level-1]*86400000:0;
- return {level,nextDueAt:now+delay,misses:(current?.misses||0)+(passed?0:1)};
+ const round=roundOf(current);
+ return {level,round:passed?(round===Number.MAX_SAFE_INTEGER?0:round+1):round,nextDueAt:now+delay,misses:(current?.misses||0)+(passed?0:1)};
 }

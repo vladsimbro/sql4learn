@@ -13,7 +13,7 @@ export const lessonGuides={
     "requires": [
       "first-query"
     ],
-    "goal": "Отличать строку, столбец, первичный ключ и уровень детализации исходной таблицы.",
+    "goal": "Отличать базу данных, таблицу, строку, столбец и уровень детализации исходных данных.",
     "predict": "Посмотри на orders и stores: что будет означать одна строка каждого результата SELECT *?",
     "pitfall": "Не считай order_items таблицей заказов: несколько товарных позиций могут принадлежать одному order_id.",
     "check": "Объясни, зачем перед первым отчётом необходимо определить смысл строки источника."
@@ -92,7 +92,8 @@ export const lessonGuides={
   },
   "aggr-basic": {
     "requires": [
-      "where-basic"
+      "where-basic",
+      "null-range"
     ],
     "goal": "Правильно выбрать COUNT, SUM и AVG с учётом NULL и бизнес-правил показателя.",
     "predict": "Чем будет отличаться COUNT(*) от COUNT(courier_id), когда есть заказы без назначенного курьера?",
@@ -129,7 +130,8 @@ export const lessonGuides={
   },
   "inner": {
     "requires": [
-      "columns"
+      "columns",
+      "keys-relations"
     ],
     "goal": "Соединять таблицы по ключам и понимать, когда INNER JOIN исключает строку.",
     "predict": "Как поменяется число строк orders после JOIN со stores по уникальному store_id?",

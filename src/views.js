@@ -150,7 +150,7 @@ function taskEditor(state,task,exam=false,withHelp=false){
   <div class="editor-shortcuts"><span>Ctrl / Cmd + Enter — проверить</span><span>SQL · read only</span></div></div>
   <div class="task-actions"><button class="btn primary" data-action="check" data-task-id="${esc(task.id)}" ${!state.engineReady?'disabled':''}>Проверить SQL</button><button class="btn" data-action="run" data-task-id="${esc(task.id)}" ${!state.engineReady?'disabled':''}>Выполнить</button>${exam?'':`${withHelp?'':`<button class="btn" data-action="hint" data-task-id="${esc(task.id)}">Подсказка</button>`}<button class="btn" data-action="solution" data-task-id="${esc(task.id)}">Разобрать решение</button>`}</div>
   ${withHelp?`<div class="lesson-hints"><strong>Если застрял — открой помощь по одному шагу</strong><details><summary>Подсказка 1 · с чего начать</summary><p>${esc(getLessonGuide(task.lessonId||state.route?.id)?.goal||'Определи, что означает одна строка будущего результата.')}</p></details><details><summary>Подсказка 2 · какую ошибку проверить</summary><p>${esc(getLessonGuide(task.lessonId||state.route?.id)?.pitfall||'Проверь смысл строк и условия выборки.')}</p></details><details><summary>Подсказка 3 · проверь себя перед отправкой</summary><p>${esc(getLessonGuide(task.lessonId||state.route?.id)?.check||'Проверь ожидаемые строки, имена и порядок результата.')}</p></details></div>`:''}
-  <div id="task-feedback">${result?renderFeedback(result):''}</div><div id="task-result">${result?.query?renderQueryTable(result.query):''}</div>
+  <div id="task-feedback" role="status" aria-live="polite">${result?renderFeedback(result):''}</div><div id="task-result">${result?.query?renderQueryTable(result.query):''}</div>
  </section>`;
 }
 function renderDifference(details){
@@ -179,7 +179,7 @@ const formatted=value=>value===null?'<span class="null-token">NULL</span>':esc(v
 export function renderQueryTable(output){
  const fields=(output?.fields||[]).map(field=>field.name),rows=output?.rows||[];
  if(!fields.length)return '<div class="feedback info">Запрос выполнен, но табличных столбцов нет.</div>';
- return `<div class="result-box"><div class="result-title"><span>Результат SQL</span><small>${rows.length} строк · показано до 80</small></div><div class="table-scroll">
+ return `<div class="result-box"><div class="result-title"><span>Результат SQL</span><small>${rows.length} строк · показано до 80</small></div><div class="table-scroll" tabindex="0" role="region" aria-label="Результат SQL, прокручиваемая таблица">
  <table class="data-table"><thead><tr>${fields.map(c=>`<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>
  ${rows.length?rows.slice(0,80).map(row=>`<tr>${fields.map(f=>`<td>${formatted(row[f])}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${fields.length}">Нет строк</td></tr>`}</tbody></table></div></div>`;
 }
@@ -369,7 +369,7 @@ export function renderPlayground(state){
  <textarea class="sql-editor" id="sql-editor" spellcheck="false" data-draft="playground" aria-label="SQL-песочница">${esc(state.playground)}</textarea>
  <div class="editor-shortcuts"><span>Ctrl / Cmd + Enter — выполнить</span><span>Только чтение</span></div></div>
  <div class="task-actions"><button class="btn primary" data-action="run" data-task-id="playground" ${!state.engineReady?'disabled':''}>Выполнить запрос</button><button class="btn" data-action="sample">Пример: заказы по статусам</button><button class="btn" data-action="reset-playground">Очистить</button></div>
- <div id="task-feedback">${output?renderFeedback(output):''}</div><div id="task-result">${output?.query?renderQueryTable(output.query):''}</div>
+ <div id="task-feedback" role="status" aria-live="polite">${output?renderFeedback(output):''}</div><div id="task-result">${output?.query?renderQueryTable(output.query):''}</div>
  </section></div><aside class="workspace-right">${schemaPanel(state)}</aside></div>`;
 }
 
@@ -387,7 +387,7 @@ export function renderXray(state){
  <div class="task-actions"><button class="btn primary" data-action="xray-run" ${!state.engineReady?'disabled':''}>Выполнить этот этап</button>
  ${index<selected.steps.length-1?`<button class="btn" data-xray-step="${selected.id}:${index+1}">Следующий шаг →</button>`:''}
  ${button('Перейти к уроку',`#/lesson/${selected.lesson}`)}</div>
- <div id="xray-result">${shown?(state.xrayResult.error?`<div class="feedback error">${esc(state.xrayResult.error)}</div>`:renderQueryTable(state.xrayResult.query)):''}</div>
+ <div id="xray-result" role="status" aria-live="polite">${shown?(state.xrayResult.error?`<div class="feedback error">${esc(state.xrayResult.error)}</div>`:renderQueryTable(state.xrayResult.query)):''}</div>
  <div class="xray-explain"><strong>Почему результат именно такой</strong><p>${esc(stage.why)}</p></div>
  </section></div><aside class="workspace-right">${schemaPanel(state)}
  <section class="card side-card"><h3>Исследовательский метод</h3><p class="small muted" style="line-height:1.85">До запуска предскажи число строк. После запуска сравни фактический результат с ожиданием. Объясни, что теперь означает одна строка.</p></section></aside></div>`;
@@ -407,7 +407,7 @@ export function renderFix(state,id){
 }
 
 export function renderNotFound(){return header('ОШИБКА МАРШРУТА','Раздел не найден','Вернись к учебной программе.',button('На главную','#/home',true));}
-export function renderPage(state,route){
+function renderRoute(state,route){
  if(route.page==='home')return {title:'Главная',html:renderHome(state)};
  if(route.page==='course')return {title:'Учебный маршрут',html:renderCourse(state)};
  if(route.page==='module')return {title:'Модуль',html:renderModule(state,route.id)};
@@ -424,4 +424,9 @@ export function renderPage(state,route){
  if(route.page==='clinic')return {title:'Клиника ошибок',html:renderClinic(state)};
  if(route.page==='fix')return {title:'Исправление SQL',html:renderFix(state,route.id)};
  return {title:'Не найдено',html:renderNotFound()};
+}
+export function renderPage(state,route){
+ const page=renderRoute(state,route);
+ if(state.engineError)page.html=`<section class="feedback error" role="alert"><strong>PostgreSQL не запустился.</strong><p>Учебные материалы доступны. ${esc(state.engineError)}</p><button class="btn" data-action="retry-engine">Повторить запуск PostgreSQL</button></section>`+page.html;
+ return page;
 }

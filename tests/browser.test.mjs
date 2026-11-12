@@ -3,7 +3,7 @@ import {chromium} from 'playwright';
 import {independentProjectTaskById} from '../src/portfolio.js';
 
 const base=process.env.BASE_URL||'http://127.0.0.1:4173/';
-const browser=await chromium.launch({headless:true});
+const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
 const page=await browser.newPage({viewport:{width:1400,height:900},acceptDownloads:true});
 const errors=[];
 page.on('pageerror',error=>errors.push(String(error)));

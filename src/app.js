@@ -1,18 +1,16 @@
 import {modules,lessons,tasks,lessonById,taskById,moduleById} from './content.js';
 import {assessments,assessmentTaskById,assessmentById} from './assessments.js';
-import {SEED_SQL,ALTERNATE_SQL} from './data.js';
-import {SUPPORT_SEED_SQL,SUPPORT_ALTERNATE_SQL,SUPPORT_SCHEMA} from './project-data.js';
-import {INVENTORY_SEED_SQL,INVENTORY_ALTERNATE_SQL,INVENTORY_SCHEMA} from './inventory-data.js';
+import {SUPPORT_SCHEMA} from './project-data.js';
+import {INVENTORY_SCHEMA} from './inventory-data.js';
 import {independentProjectById,independentProjectTaskById} from './portfolio.js';
 import {reviewSkills,reviewSkillById,reviewStatus,reviewTask,advanceReview} from './review-bank.js';
 import {clinicTaskById} from './clinic.js';
 import {xrayById,xrayScenarios} from './xray.js';
-import {loadProgress,storeProgress,exportProgress,importProgress} from './progress.js';
-import {queryReadOnly,gradeSQL} from './sql.js';
+import {loadProgress,storeProgress,exportProgress,importProgress,progressStorageStatus} from './progress.js';
+import {SqlRuntime,queryReadOnly,gradeSQL} from './sql-client.js';
 import {renderPage,renderFeedback,renderQueryTable} from './views.js';
 
 const $=(selector,root=document)=>root.querySelector(selector);
-const PGLITE_URL='https://cdn.jsdelivr.net/npm/@electric-sql/pglite@0.5.15/dist/index.js';
 const state={
   progress:loadProgress(),engineReady:false,engineError:'',db:null,secondaryDB:null,secondaryPromise:null,
   schema:'orders',filter:'all',activeTaskId:null,result:null,exampleResult:null,previewTable:null,recallFeedback:null,route:null,xrayScenario:'join-fanout',xrayStep:0,xrayResult:null,
@@ -24,7 +22,12 @@ function toast(text){
   box.textContent=text;box.classList.add('visible');clearTimeout(toast.timer);
   toast.timer=setTimeout(()=>box.classList.remove('visible'),3300);
 }
-function progressSave(){state.progress=storeProgress(state.progress);updateSideProgress();}
+function updateStorageWarning(){
+ const warning=$('#storage-warning');if(!warning)return;
+ const message=progressStorageStatus();
+ warning.hidden=!message;$('#storage-warning-text').textContent=message;
+}
+function progressSave(){state.progress=storeProgress(state.progress);updateSideProgress();updateStorageWarning();}
 function updateSideProgress(){
  const done=tasks.filter(task=>state.progress.completed.includes(task.id)).length;
  const pct=Math.round(100*done/tasks.length);
@@ -66,13 +69,36 @@ function updateNav(route,title){
  });
 }
 function render({keepScroll=false}={}){
- const previous=window.scrollY;
- const route=currentRoute();state.route=route;activeTask(route);
+ const previous=window.scrollY,focused=document.activeElement;
+ const route=currentRoute(),sameRoute=state.route?.page===route.page&&state.route?.id===route.id;
+ let focusSelector=null,selection=null;
+ if(keepScroll&&sameRoute&&focused&&$('#app').contains(focused)){
+  if(focused.id)focusSelector='#'+CSS.escape(focused.id);
+  else{
+   const attr=['data-schema','data-filter','data-task-tab','data-exam-tab','data-project-task','data-quiz','data-xray-step','data-xray-scenario','data-action'].find(name=>focused.hasAttribute(name));
+   if(attr)focusSelector='['+attr+'="'+CSS.escape(focused.getAttribute(attr))+'"]';
+  }
+  if(typeof focused.selectionStart==='number')selection={start:focused.selectionStart,end:focused.selectionEnd,direction:focused.selectionDirection,top:focused.scrollTop,left:focused.scrollLeft};
+ }
+ state.route=route;activeTask(route);
  const page=renderPage(state,route);$('#app').innerHTML=page.html;
+ $('#app').querySelectorAll('button[data-schema],button[data-filter],button[data-task-tab],button[data-exam-tab],button[data-project-task],button[data-xray-step],button[data-xray-scenario],button[data-quiz]').forEach(button=>button.setAttribute('aria-pressed',String(button.classList.contains('active')||button.classList.contains('correct')||button.classList.contains('wrong'))));
+ document.title=page.title+' · SQL4Learn';
+ updateStorageWarning();
  updateNav(route,page.title);updateSideProgress();
  document.documentElement.dataset.theme=state.progress.theme;
  if(!keepScroll)window.scrollTo({top:0,behavior:'instant'});
  else window.scrollTo({top:previous,behavior:'instant'});
+ if(focusSelector){
+  const next=document.querySelector(focusSelector);
+  if(next){
+   next.focus({preventScroll:true});
+   if(selection&&typeof next.setSelectionRange==='function'){
+    next.setSelectionRange(Math.min(selection.start,next.value.length),Math.min(selection.end,next.value.length),selection.direction);
+    next.scrollTop=selection.top;next.scrollLeft=selection.left;
+   }
+  }
+ }
 }
 function engineStatus(ready=false,message='',failed=false){
  const pill=$('#engine-status');pill.classList.toggle('ready',ready);pill.classList.toggle('failed',failed);
@@ -80,22 +106,21 @@ function engineStatus(ready=false,message='',failed=false){
 }
 async function initDatabase(){
  if(state.loading)return;
+ state.db?.close();
  state.loading=true;state.engineReady=false;state.engineError='';
- engineStatus(false,'Подключаем PostgreSQL');render({keepScroll:true});
- try{
-  const {PGlite}=await import(PGLITE_URL);
-  const database=await PGlite.create();
-  await database.exec(SEED_SQL);
-  await database.exec(SUPPORT_SEED_SQL);
-  await database.exec(INVENTORY_SEED_SQL);
-  state.db=database;state.engineReady=true;engineStatus(true,'PostgreSQL готов');
-  state.secondaryPromise=(async()=>{const extra=await PGlite.create();await extra.exec(SEED_SQL);await extra.exec(ALTERNATE_SQL);await extra.exec(SUPPORT_SEED_SQL);await extra.exec(SUPPORT_ALTERNATE_SQL);await extra.exec(INVENTORY_SEED_SQL);await extra.exec(INVENTORY_ALTERNATE_SQL);state.secondaryDB=extra;return extra;})();
-  state.secondaryPromise.catch(error=>{console.error('Контрольная база не запустилась',error);});
+ const database=new SqlRuntime({onState:(status,message='')=>{
+  state.engineReady=status==='ready';state.loading=status==='loading';
+  state.engineError=status==='failed'?message:'';
+  engineStatus(state.engineReady,status==='loading'?'Подключаем PostgreSQL':status==='failed'?'Ошибка PostgreSQL':'PostgreSQL готов',status==='failed');
   render({keepScroll:true});
- }catch(error){
+ }});
+ state.db=database;state.secondaryDB=database;
+ state.secondaryPromise=database.start().then(()=>database);
+ try{await state.secondaryPromise;}
+ catch(error){
   console.error('Не удалось запустить PostgreSQL',error);
   state.engineError=String(error.message||error);engineStatus(false,'Ошибка PostgreSQL',true);
-  toast('Не удалось загрузить SQL-движок. Проверь соединение и обнови страницу.');
+  toast('Не удалось загрузить SQL-движок. Проверь соединение и повтори запуск.');
   render({keepScroll:true});
  }finally{state.loading=false;}
 }
@@ -162,6 +187,8 @@ async function runQuery(mode,id){
  if(mode==='check'&&id==='playground')mode='run';
  const sql=getEditorText().trim();
  if(!sql){toast('SQL-редактор пуст.');return;}
+ const request=state.queryRequest=(state.queryRequest||0)+1,routeAtStart=location.hash;
+ const isCurrent=()=>request===state.queryRequest&&location.hash===routeAtStart&&id===currentTaskID();
  const button=$(`[data-action="${mode}"]`);if(button)button.disabled=true;
  state.result={taskId:id,loading:true};updateResults();
  try{
@@ -177,16 +204,19 @@ async function runQuery(mode,id){
         state.progress.drafts[id]='';
         progressSave();
         const interval=state.progress.review[id].level===1?'1 день':state.progress.review[id].level===2?'3 дня':state.progress.review[id].level===3?'7 дней':'30 дней';
+        if(!isCurrent())return;
         state.recallFeedback={ok:true,message:'Задача решена на обоих наборах данных. Следующая проверка этого навыка — примерно через '+interval+'.'};
         state.result=null;render({keepScroll:true});return;
       }
       state.progress.completed=[...new Set([...state.progress.completed,id])];progressSave();
+      if(!isCurrent())return;
       state.result={taskId:id,passed:true,query:grade.actual};
       render({keepScroll:true});
       $('#task-feedback')?.scrollIntoView({block:'nearest'});
       return;
     }
     const outcome=grade.case==='alternate'?grade.secondary:grade.primary;
+    if(!isCurrent())return;
     state.result={taskId:id,gradeFailed:true,message:grade.case==='alternate'?
       'На исходных данных ответ верен, но на изменённом наборе — нет. '+outcome.message:outcome.message,
       query:grade.actual,details:state.route?.page==='lesson'?outcome.details:null};
@@ -198,13 +228,14 @@ async function runQuery(mode,id){
     }
   }else{
     const query=await queryReadOnly(state.db,sql);
+    if(!isCurrent())return;
     state.result={taskId:id,query,message:'Запрос выполнен. Для зачёта нажми «Проверить SQL»: система сравнит результат ещё и с изменёнными данными.'};
   }
  }catch(error){
-  state.result={taskId:id,error:String(error.message||error)};
+  if(isCurrent())state.result={taskId:id,error:String(error.message||error)};
  }finally{
   if(button)button.disabled=false;
-  updateResults();
+  if(isCurrent())updateResults();
  }
 }
 function showHint(task){
@@ -224,7 +255,7 @@ function onClick(event){
  if(button.id==='theme-toggle'){
   state.progress.theme=state.progress.theme==='dark'?'light':'dark';progressSave();render({keepScroll:true});return;
  }
- if(button.id==='export-button'){exportFile();return;}
+ if(button.id==='export-button'||button.id==='storage-export'){exportFile();return;}
  if(button.dataset.schema){state.schema=button.dataset.schema;state.previewTable=null;render({keepScroll:true});return;}
  if(button.dataset.xrayScenario){state.xrayScenario=button.dataset.xrayScenario;state.xrayStep=0;state.xrayResult=null;render({keepScroll:true});return;}
  if(button.dataset.xrayStep){const [scenario,index]=button.dataset.xrayStep.split(':');if(xrayById[scenario]?.steps[Number(index)]){state.xrayScenario=scenario;state.xrayStep=Number(index);state.xrayResult=null;render({keepScroll:true});}return;}
@@ -281,12 +312,14 @@ function onInput(event){
 }
 function toggleMenu(open){
  const sidebar=$('#sidebar'),button=$('#menu-toggle');
+ const focusInside=sidebar.contains(document.activeElement);
  const show=typeof open==='boolean'?open:!sidebar.classList.contains('open');
  sidebar.classList.toggle('open',show);
  button.setAttribute('aria-expanded',String(show));
  let backdrop=$('#mobile-backdrop');
  if(show&&!backdrop){backdrop=document.createElement('div');backdrop.id='mobile-backdrop';backdrop.className='mobile-backdrop';backdrop.addEventListener('click',()=>toggleMenu(false));document.body.append(backdrop);}
- if(!show){backdrop?.remove();}
+ if(show)sidebar.querySelector('a,button')?.focus({preventScroll:true});
+ if(!show){backdrop?.remove();if(focusInside)button.focus({preventScroll:true});}
 }
 function exportFile(){
  const blob=new Blob([exportProgress(state.progress)],{type:'application/json;charset=utf-8'});
@@ -304,6 +337,7 @@ async function importFile(event){
  }catch(error){toast('Импорт не выполнен: '+error.message);}
 }
 function bind(){
+ document.querySelector('.skip-link')?.addEventListener('click',event=>{event.preventDefault();$('#app').focus();$('#app').scrollIntoView({block:'start'});});
  document.addEventListener('click',onClick);
  document.addEventListener('input',onInput);
  document.addEventListener('keydown',event=>{
@@ -312,7 +346,7 @@ function bind(){
   }
   if(event.key==='Escape')toggleMenu(false);
  });
- window.addEventListener('hashchange',()=>{state.result=null;state.recallFeedback=null;state.exampleResult=null;toggleMenu(false);render();try{state.progress.lastRoute=window.location.hash;progressSave();}catch{}});
+ window.addEventListener('hashchange',()=>{state.queryRequest=(state.queryRequest||0)+1;state.result=null;state.recallFeedback=null;state.exampleResult=null;toggleMenu(false);render();$('#app').focus({preventScroll:true});try{state.progress.lastRoute=window.location.hash;progressSave();}catch{}});
  $('#import-file').addEventListener('change',importFile);
  window.addEventListener('error',event=>console.error('Ошибка приложения:',event.error||event.message));
 }
