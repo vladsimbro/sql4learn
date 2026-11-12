@@ -5,6 +5,10 @@ import {clinicTasks} from './clinic.js';
 import {independentProjects,independentProjectTasks} from './portfolio.js';
 import {reviewSkills} from './review-bank.js';
 export const STORAGE_KEY='sql4learn-progress-v1';
+// A successful later write cannot establish that an earlier failed read recovered
+// the user's old results. Keep that warning for the lifetime of this page.
+let storageReadError='',storageWriteError='';
+export function progressStorageStatus(){return [storageReadError,storageWriteError].filter(Boolean).join(' ');}
 export function initialProgress(){return {version:1,curriculumVersion:2,legacyMastered:[],completed:[],quiz:{},read:[],drafts:{},notes:{},projectNotes:{},review:{},theme:'light',lastRoute:'#/home'};}
 const ids=new Set([...tasks,...assessmentTasks,...clinicTasks,...independentProjectTasks].map(item=>item.id)),lessonIds=new Set(lessons.map(lesson=>lesson.id)),projectIds=new Set(independentProjects.map(project=>project.id)),reviewIds=new Set(reviewSkills.map(skill=>skill.id)),draftIds=new Set([...ids,...reviewIds]);
 const optionalPracticeIds=new Set(supplementaryLessonPractice.map(entry=>entry.task.id));
@@ -34,6 +38,7 @@ export function normalizeProgress(value){
     projectNotes:safeRecord(x.projectNotes,projectIds,4000),
     review:Object.fromEntries(Object.entries(record(x.review)).filter(([key,value])=>reviewIds.has(key)&&value&&typeof value==='object'&&!Array.isArray(value)).map(([key,value])=>[key,{
       level:Number.isInteger(value.level)?Math.min(4,Math.max(0,value.level)):0,
+      ...(Number.isSafeInteger(value.round)&&value.round>=0?{round:value.round}:{}),
       nextDueAt:typeof value.nextDueAt==='number'&&Number.isFinite(value.nextDueAt)&&value.nextDueAt>=0?Math.min(value.nextDueAt,4102444800000):0,
       misses:Number.isInteger(value.misses)?Math.min(100000,Math.max(0,value.misses)):0
     }])),
@@ -42,13 +47,26 @@ export function normalizeProgress(value){
   };
 }
 export function loadProgress(){
- try{return normalizeProgress(JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}'));}
- catch(error){console.warn('Повреждённый прогресс:',error);return initialProgress();}
+ let saved;
+ try{saved=localStorage.getItem(STORAGE_KEY);}
+ catch{
+  storageReadError='Не удалось прочитать прогресс из хранилища браузера. Открыт пустой учебный маршрут. Экспортируйте новые результаты перед закрытием страницы.';
+  return initialProgress();
+ }
+ try{return normalizeProgress(JSON.parse(saved||'{}'));}
+ catch{
+  storageReadError='Сохранённый прогресс повреждён или имеет неподдерживаемый формат. Открыт пустой учебный маршрут. Если есть резервная копия, восстановите её.';
+  return initialProgress();
+ }
 }
 export function storeProgress(value){
  const normal=normalizeProgress(value);
- try{localStorage.setItem(STORAGE_KEY,JSON.stringify(normal));}
- catch(error){console.warn('Недоступно хранилище прогресса:',error);}
+ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(normal));storageWriteError='';}
+ catch(error){
+  const full=error?.name==='QuotaExceededError'||error?.name==='NS_ERROR_DOM_QUOTA_REACHED';
+  storageWriteError=(full?'Хранилище браузера заполнено. ':'Не удалось сохранить прогресс в браузере. ')+
+   'Последние изменения доступны только в этой вкладке. Экспортируйте прогресс перед её закрытием.';
+ }
  return normal;
 }
 export function exportProgress(value){

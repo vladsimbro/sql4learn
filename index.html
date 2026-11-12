@@ -13,6 +13,7 @@
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
 </head>
 <body>
+  <a class="skip-link" href="#app">Перейти к содержимому</a>
   <div class="shell" id="shell">
     <aside class="sidebar" id="sidebar">
       <a class="brand" href="#/home" aria-label="SQL4Learn — главная">
@@ -50,9 +51,10 @@
           <div class="engine-status" id="engine-status" role="status" aria-live="polite"><i></i><span>Запуск PostgreSQL</span></div>
           <button id="theme-toggle" class="top-icon-button" title="Сменить тему" aria-label="Сменить тему">◐</button>
           <button id="export-button" class="top-icon-button" title="Экспортировать прогресс" aria-label="Экспортировать прогресс">⇩</button>
-          <label class="top-icon-button import-label" title="Импортировать прогресс" aria-label="Импортировать прогресс">⇧<input id="import-file" type="file" accept=".json,application/json" hidden></label>
+          <label class="top-icon-button import-label" title="Импортировать прогресс"><span aria-hidden="true">⇧</span><input id="import-file" type="file" accept=".json,application/json" aria-label="Импортировать прогресс"></label>
         </div>
       </header>
+      <div id="storage-warning" class="storage-warning" role="status" aria-live="polite" hidden><p id="storage-warning-text"></p><button class="btn" id="storage-export">Скачать резервную копию</button></div>
       <main id="app" class="app-content" tabindex="-1"><div class="boot"><span class="boot-spinner"></span><h1>Собираем рабочее пространство</h1><p>Теория доступна сразу, PostgreSQL запускается отдельно.</p></div></main>
       <footer class="site-footer"><span>SQL4Learn · Учись думать данными</span><span>Оригинальный курс · PostgreSQL в браузере</span></footer>
     </div>

@@ -194,7 +194,7 @@ test('Every SQL answer executes on original and adversarial PostgreSQL fixtures'
   const inventoryCounts=await base.query('SELECT (SELECT COUNT(*) FROM inventory.locations) AS locations,(SELECT COUNT(*) FROM inventory.products) AS products,(SELECT COUNT(*) FROM inventory.opening_stock) AS opening,(SELECT COUNT(*) FROM inventory.movements) AS movements,(SELECT COUNT(*) FROM inventory.stocktakes) AS stocktakes');
   assert.deepEqual(Object.values(inventoryCounts.rows[0]).map(Number),[3,4,9,15,12],'Warehouse case must use a separate five-table schema and stock ledger');
   const alternateInventory=await alt.query('SELECT (SELECT COUNT(*) FROM inventory.locations) AS locations,(SELECT COUNT(*) FROM inventory.products) AS products,(SELECT COUNT(*) FROM inventory.opening_stock) AS opening,(SELECT COUNT(*) FROM inventory.movements) AS movements,(SELECT COUNT(*) FROM inventory.stocktakes) AS stocktakes');
-  assert.deepEqual(Object.values(alternateInventory.rows[0]).map(Number),[5,5,12,21,18],'Adversarial fixture adds warehouses, SKU, negative stock, late postings and recounts');
+  assert.deepEqual(Object.values(alternateInventory.rows[0]).map(Number),[5,5,12,22,18],'Adversarial fixture adds warehouses, SKU, negative stock, late postings, recounts and movements after counts');
   const emptyWarehouse=await queryReadOnly(alt,independentProjectTaskById['portfolio-inventory-6'].sql);
   assert.ok(emptyWarehouse.rows.some(row=>Number(row.location_id)===5&&Number(row.counted_positions)===0&&Number(row.discrepant_positions)===0&&Number(row.absolute_gap_units)===0),'Warehouse without any stocktake must survive reconciliation with zero totals');
   const cut=await base.query("SELECT SUM(delta) AS delta FROM inventory.movements WHERE location_id=1 AND product_id=101 AND moved_at<TIMESTAMP '2026-08-10 12:00'");
@@ -206,7 +206,7 @@ test('Every SQL answer executes on original and adversarial PostgreSQL fixtures'
   const supportCounts=await base.query('SELECT (SELECT COUNT(*) FROM support.clients) AS clients,(SELECT COUNT(*) FROM support.agents) AS agents,(SELECT COUNT(*) FROM support.tickets) AS tickets,(SELECT COUNT(*) FROM support.ticket_events) AS events');
   assert.deepEqual(Object.values(supportCounts.rows[0]).map(Number),[6,5,16,38],'Initial project is an independent, grounded business dataset');
   const altSupportCounts=await alt.query('SELECT (SELECT COUNT(*) FROM support.clients) AS clients,(SELECT COUNT(*) FROM support.agents) AS agents,(SELECT COUNT(*) FROM support.tickets) AS tickets,(SELECT COUNT(*) FROM support.ticket_events) AS events');
-  assert.deepEqual(Object.values(altSupportCounts.rows[0]).map(Number),[8,6,20,50],'Second dataset must change staff, clients, tickets and event history');
+  assert.deepEqual(Object.values(altSupportCounts.rows[0]).map(Number),[8,6,20,52],'Second dataset must include invalid early replies in the event history');
   const exactly60=await base.query("SELECT EXTRACT(EPOCH FROM ((SELECT MIN(event_at) FROM support.ticket_events WHERE ticket_id=3016 AND event_type='reply')-(SELECT opened_at FROM support.tickets WHERE ticket_id=3016)))/60 AS minutes");
   assert.equal(Number(exactly60.rows[0].minutes),60,'SLA cutoff must include the exact boundary');
   const rowCounts=await base.query('SELECT (SELECT COUNT(*) FROM orders) AS orders_count, (SELECT COUNT(*) FROM stores) AS stores_count');
